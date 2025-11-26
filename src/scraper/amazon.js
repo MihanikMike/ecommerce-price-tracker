@@ -1,4 +1,5 @@
 import { fetchPage } from "../utils/fetch-page.js";
+import logger from "../utils/logger.js";
 
 export async function scrapeAmazon(url) {
     const { browser, page } = await fetchPage(url);
@@ -10,6 +11,8 @@ export async function scrapeAmazon(url) {
         const price = await page.$eval(".a-price > .a-offscreen", el => 
             el.innerText.replace(/[^0-9.]/g, ""));
 
+        logger.debug({ url, title, price }, 'Amazon scrape successful');
+
         return {
             site: "Amazon",
             url,
@@ -18,7 +21,7 @@ export async function scrapeAmazon(url) {
             timestamp: new Date()
         };    
     } catch (err) {
-        console.error(`Amazon scraping error: ${err.message}`);
+        logger.error({ error: err, url }, 'Amazon scraping failed');
         return null;
     } finally {
         await browser.close();

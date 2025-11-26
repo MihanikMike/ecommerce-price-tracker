@@ -1,3 +1,6 @@
+import { pool } from "../db/connect-pg.js";
+import logger from "../utils/logger.js";
+
 export async function upsertProductAndHistory({ url, site, title, price, currency }) {
   const client = await pool.connect();
   try {
@@ -14,9 +17,11 @@ export async function upsertProductAndHistory({ url, site, title, price, currenc
       [productId, price, currency || 'USD']
     );
     await client.query("COMMIT");
+    logger.debug({ productId, url, price }, 'Product and price history saved');
     return productId;
   } catch (e) {
     await client.query("ROLLBACK");
+    logger.error({ error: e, url }, 'Failed to save product');
     throw e;
   } finally {
     client.release();
