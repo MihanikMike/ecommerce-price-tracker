@@ -1,4 +1,4 @@
-import { connectDB, closeDB } from "../db/connect.js";
+import { connectDB, closeDB } from "../db/connect-mongo.js";
 import { ProductModel } from "../db/models/Product.js";
 import { scrapeAmazon } from "../scraper/amazon.js";
 import { scrapeBurton } from "../scraper/burton.js";
