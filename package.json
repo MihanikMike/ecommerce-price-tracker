@@ -2,7 +2,7 @@
   "name": "ecommerce-price-tracker",
   "version": "1.0.0",
   "type": "module",
-  "description": "",
+  "description": "A Node.js application that monitors and tracks prices of products from e-commerce sites like Amazon and Burton, storing price history in MongoDB",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
