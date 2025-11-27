@@ -2,17 +2,11 @@ import logger from "../utils/logger.js";
 import { scrapeAmazon } from "../scraper/amazon.js";
 import { scrapeBurton } from "../scraper/burton.js";
 import { upsertProductAndHistory, getAllProductsWithLatestPrice } from "../db/productRepository.js";
+import { getProductsToCheck, updateProductCheckTime } from "../db/trackedProductsRepository.js";
 import { exportToJSON } from "../services/exportService.js";
 import { retry } from "../utils/retry.js";
 import { delay } from "../utils/delay.js";
 import config from "../config/index.js";
-
-// Product URLs - TODO: Move to database
-const PRODUCT_URLS = [
-    "https://www.amazon.com/dp/B0DHS3B7S1",
-    "https://www.amazon.com/dp/B0DHS5F4PZ",
-    "https://www.burton.com/us/en/p/mens-burton-freestyle-reflex-snowboard-bindings/W26-105441B27ORG00M.html"
-];
 
 /**
  * Determine which scraper to use based on URL
@@ -55,23 +49,27 @@ async function scrapeProductWithRetry(url) {
 /**
  * Process a single product: scrape and save
  */
-async function processProduct(url) {
-    logger.info({ url }, 'Processing product');
+async function processProduct(trackedProduct) {
+    const { id: trackedProductId, url } = trackedProduct;
+    logger.info({ url, trackedProductId }, 'Processing product');
 
     const data = await scrapeProductWithRetry(url);
 
     if (!data) {
-        logger.warn({ url }, 'Scraping returned no data, skipping');
+        logger.warn({ url, trackedProductId }, 'Scraping returned no data, skipping');
+        await updateProductCheckTime(trackedProductId, false);
         return false;
     }
 
     try {
         const productId = await upsertProductAndHistory(data);
-        logger.info({ productId, url, title: data.title, price: data.price }, 'Product saved successfully');
+        await updateProductCheckTime(trackedProductId, true);
+        logger.info({ productId, trackedProductId, url, title: data.title, price: data.price }, 'Product saved successfully');
         return true;
         
     } catch (error) {
-        logger.error({ error, url }, 'Failed to save product to database');
+        logger.error({ error, url, trackedProductId }, 'Failed to save product to database');
+        await updateProductCheckTime(trackedProductId, false);
         return false;
     }
 }
@@ -83,20 +81,41 @@ export async function runPriceMonitor() {
     const startTime = Date.now();
     logger.info('Starting price monitoring cycle');
 
+    // Load products from database
+    const trackedProducts = await getProductsToCheck(100);
+    
+    if (trackedProducts.length === 0) {
+        logger.warn('No products found to check. Run seed script to add products.');
+        return { total: 0, successful: 0, failed: 0 };
+    }
+
+    logger.info({ count: trackedProducts.length }, 'Loaded products from database');
+
     const results = {
-        total: PRODUCT_URLS.length,
+        total: trackedProducts.length,
         successful: 0,
         failed: 0,
     };
 
-    for (const url of PRODUCT_URLS) {
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 5;
+
+    for (const trackedProduct of trackedProducts) {
         try {
-            const success = await processProduct(url);
+            const success = await processProduct(trackedProduct);
             
             if (success) {
                 results.successful++;
+                consecutiveFailures = 0; // Reset on success
             } else {
                 results.failed++;
+                consecutiveFailures++;
+            }
+
+            // Circuit breaker: stop if too many consecutive failures
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                logger.error({ consecutiveFailures }, 'Too many consecutive failures, stopping scraping cycle');
+                break;
             }
 
             // Rate limiting: delay between requests
@@ -107,8 +126,15 @@ export async function runPriceMonitor() {
             await delay(delayMs);
             
         } catch (error) {
-            logger.error({ error, url }, 'Unexpected error processing product');
+            logger.error({ error, url: trackedProduct.url }, 'Unexpected error processing product');
             results.failed++;
+            consecutiveFailures++;
+            
+            // Circuit breaker check
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                logger.error({ consecutiveFailures }, 'Too many consecutive failures, stopping scraping cycle');
+                break;
+            }
         }
     }
 

@@ -75,7 +75,8 @@ export async function runMigrations() {
         const migrationsDir = path.join(__dirname, 'migrations');
         const migrationFiles = [
             '001_init.sql',
-            // Add more migration files here as needed
+            '002_add_indexes.sql',
+            '003_tracked_products.sql'
         ];
         
         // Execute pending migrations
