@@ -12,10 +12,10 @@
 | Priority | Total | Completed | Remaining | Progress |
 |----------|-------|-----------|-----------|----------|
 | 🔴 Critical | 8 | 8 | 0 | ✅ 100% |
-| 🟠 High | 12 | 1 | 11 | ⏳ 8% |
+| 🟠 High | 12 | 5 | 7 | ✅ 42% |
 | 🟡 Medium | 10 | 1 | 9 | ⏳ 10% |
 | 🟢 Low | 5 | 0 | 5 | ⏳ 0% |
-| **Total** | **35** | **10** | **25** | **29%** |
+| **Total** | **35** | **14** | **21** | **40%** |
 
 **Overall Status:** 🟢 **Application is functional and can run. Focus on production readiness.**
 
@@ -37,163 +37,83 @@
 9. ✅ **Entry Point** - Created proper src/index.js with graceful shutdown
 10. ✅ **Config System** - Enhanced config with all required properties and validation
 
+### High Priority (November 26, 2025)
+11. ✅ **CLI Scripts** - Created migrate.js and seed.js for database management
+12. ✅ **Database Indexes** - Added 5 performance indexes for fast queries
+13. ✅ **Tracked Products** - Moved URLs from code to database with smart scheduling
+14. ✅ **Circuit Breaker** - Added failure detection to prevent cascading errors
+
 ---
 
 ## 🟠 HIGH PRIORITY (Next 2 Weeks)
 
-### 🔧 HIGH-001: Missing CLI Migration Script
-**Priority:** HIGH  
-**Impact:** Cannot run migrations from npm scripts  
-**Effort:** 30 minutes
+### ~~🔧 HIGH-001: Missing CLI Migration Script~~ ✅ COMPLETED
+**Status:** ✅ Fixed on November 26, 2025  
+**Impact:** Can now run migrations from npm scripts
 
-**Current Issue:**
-- `package.json` has script `npm run migrate` → `node src/cli/migrate.js`
-- Directory `src/cli/` is empty
-- Migration fails
-
-**Solution:**
-```javascript
-// Create src/cli/migrate.js
-import logger from '../utils/logger.js';
-import { runMigrations, closeDatabaseConnection } from '../db/connect-pg.js';
-
-async function main() {
-    try {
-        logger.info('Starting database migrations...');
-        await runMigrations();
-        logger.info('✅ Migrations completed successfully');
-        await closeDatabaseConnection();
-        process.exit(0);
-    } catch (error) {
-        logger.error({ error }, '❌ Migration failed');
-        await closeDatabaseConnection();
-        process.exit(1);
-    }
-}
-
-main();
-```
-
-**TODO:**
-- [ ] Create `src/cli/migrate.js`
-- [ ] Create `src/cli/seed.js` for test data
-- [ ] Test migration script
-- [ ] Document usage in README
+**What was done:**
+- ✅ Created `src/cli/migrate.js` - runs all pending migrations
+- ✅ Created `src/cli/seed.js` - seeds database with initial products
+- ✅ Both scripts tested and working
+- ✅ Proper error handling and logging
 
 ---
 
-### 🔧 HIGH-002: MongoDB Code Still Present
-**Priority:** HIGH  
-**Impact:** Confusion, dead code, maintenance burden  
-**Effort:** 15 minutes
+### ~~🔧 HIGH-002: MongoDB Code Still Present~~ ✅ COMPLETED
+**Status:** ✅ Already removed  
+**Impact:** No confusion, clean codebase
 
-**Current Issue:**
-- File `src/db/connect-mongo.js` still exists but not used
-- Causes confusion about which database is active
-
-**TODO:**
-- [ ] Delete `src/db/connect-mongo.js`
-- [ ] Search for any remaining MongoDB imports
-- [ ] Update package.json description (already says PostgreSQL ✅)
-- [ ] Remove mongodb from dependencies if not needed
+**What was done:**
+- ✅ File `src/db/connect-mongo.js` already deleted
+- ✅ No MongoDB imports found in codebase
+- ✅ Package.json already updated to PostgreSQL
+- ✅ MongoDB dependencies not present
 
 ---
 
-### 🔧 HIGH-003: Missing Database Indexes
-**Priority:** HIGH  
-**Impact:** Slow queries as data grows  
-**Effort:** 20 minutes
+### ~~🔧 HIGH-003: Missing Database Indexes~~ ✅ COMPLETED
+**Status:** ✅ Fixed on November 26, 2025  
+**Impact:** Fast queries even with large datasets
 
-**Current Schema:**
-```sql
--- Only basic indexes exist:
-CREATE INDEX IF NOT EXISTS idx_products_url ON products(url);
-CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id);
-```
+**What was done:**
+- ✅ Created migration `002_add_indexes.sql`
+- ✅ Added all 5 critical indexes:
+  - `idx_price_history_captured_at` - time-series queries
+  - `idx_price_history_product_captured` - latest price lookup
+  - `idx_products_site` - filtering by site
+  - `idx_products_last_seen` - finding stale products
+  - `idx_products_site_last_seen` - composite index
+- ✅ Fixed missing columns (site, last_seen_at) in products table
+- ✅ Migration applied successfully
 
-**Missing Critical Indexes:**
-```sql
--- For time-series queries
-CREATE INDEX IF NOT EXISTS idx_price_history_captured_at 
-ON price_history(captured_at DESC);
-
--- For latest price lookup (most common query)
-CREATE INDEX IF NOT EXISTS idx_price_history_product_captured 
-ON price_history(product_id, captured_at DESC);
-
--- For filtering by site
-CREATE INDEX IF NOT EXISTS idx_products_site ON products(site);
-
--- For finding stale products
-CREATE INDEX IF NOT EXISTS idx_products_last_seen ON products(last_seen_at);
-```
-
-**TODO:**
-- [ ] Create migration `002_add_indexes.sql`
-- [ ] Add the missing indexes above
-- [ ] Run EXPLAIN ANALYZE on common queries
-- [ ] Consider partitioning price_history by date (if > 1M rows)
+**Next steps:**
+- [ ] Run EXPLAIN ANALYZE on common queries in production
+- [ ] Consider partitioning price_history if > 1M rows
 
 ---
 
-### 🔧 HIGH-004: URLs Hardcoded in Code
-**Priority:** HIGH  
-**Impact:** Cannot manage products dynamically  
-**Effort:** 2 hours
+### ~~🔧 HIGH-004: URLs Hardcoded in Code~~ ✅ COMPLETED
+**Status:** ✅ Fixed on November 26, 2025  
+**Impact:** Can now manage unlimited products dynamically
 
-**Current Problem:**
-```javascript
-// src/monitor/price-monitor.js:10-14
-const PRODUCT_URLS = [
-    "https://www.amazon.com/dp/B0DHS3B7S1",
-    // Hardcoded! ❌
-];
-```
+**What was done:**
+- ✅ Created migration `003_tracked_products.sql`
+- ✅ New `tracked_products` table with smart scheduling
+- ✅ Created `src/db/trackedProductsRepository.js` with 6 functions:
+  - `getProductsToCheck()` - loads products due for checking
+  - `updateProductCheckTime()` - updates after scraping
+  - `addTrackedProduct()` - add new products
+  - `setProductEnabled()` - enable/disable products
+  - `getAllTrackedProducts()` - list all
+  - `deleteTrackedProduct()` - remove products
+- ✅ Updated `price-monitor.js` to load from database
+- ✅ Added circuit breaker (stops after 5 consecutive failures)
+- ✅ Seeded 3 initial products (2 Amazon, 1 Burton)
+- ✅ Application tested and working!
 
-**Solution: Add Tracked Products Table**
-```sql
--- Create migration 003_tracked_products.sql
-CREATE TABLE IF NOT EXISTS tracked_products (
-    id SERIAL PRIMARY KEY,
-    url TEXT UNIQUE NOT NULL,
-    site TEXT NOT NULL,
-    enabled BOOLEAN DEFAULT true,
-    check_interval_minutes INTEGER DEFAULT 60,
-    last_checked_at TIMESTAMP WITH TIME ZONE,
-    next_check_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_tracked_products_enabled 
-ON tracked_products(enabled);
-
-CREATE INDEX IF NOT EXISTS idx_tracked_products_next_check 
-ON tracked_products(next_check_at) WHERE enabled = true;
-```
-
-**Load from Database:**
-```javascript
-async function getProductsToCheck(limit = 100) {
-    const result = await pool.query(`
-        SELECT url, site
-        FROM tracked_products 
-        WHERE enabled = true 
-        AND (next_check_at IS NULL OR next_check_at <= NOW())
-        ORDER BY last_checked_at ASC NULLS FIRST
-        LIMIT $1
-    `, [limit]);
-    
-    return result.rows;
-}
-```
-
-**TODO:**
-- [ ] Create tracked_products migration
-- [ ] Update price-monitor to load from database
-- [ ] Update last_checked_at after scraping
-- [ ] Add admin script to add/remove products
-- [ ] Add API endpoints for product management
+**Next steps:**
+- [ ] Create CLI script to add/remove products
+- [ ] Add API endpoints for product management (HIGH-009)
 
 ---
 
@@ -563,16 +483,17 @@ Alternative to REST
 
 ## 🎯 NEXT ACTIONS (Do This Week)
 
-### Day 1: Foundation
-- [ ] Create `src/cli/migrate.js`
-- [ ] Delete `src/db/connect-mongo.js`
-- [ ] Create migration `002_add_indexes.sql`
-- [ ] Run migrations
+### Day 1: Foundation ✅ COMPLETED
+- [x] Create `src/cli/migrate.js`
+- [x] Delete `src/db/connect-mongo.js`
+- [x] Create migration `002_add_indexes.sql`
+- [x] Run migrations
 
-### Day 2: URLs to Database
-- [ ] Create migration `003_tracked_products.sql`
-- [ ] Update price-monitor to load from DB
-- [ ] Migrate existing URLs to database
+### Day 2: URLs to Database ✅ COMPLETED
+- [x] Create migration `003_tracked_products.sql`
+- [x] Update price-monitor to load from DB
+- [x] Migrate existing URLs to database
+- [x] Add circuit breaker for failure handling
 
 ### Day 3: Health & Monitoring
 - [ ] Create health check endpoint
