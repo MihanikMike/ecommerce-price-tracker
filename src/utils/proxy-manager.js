@@ -56,14 +56,150 @@ const PROXY_SOURCES = [
                 return [];
             }
         }
+    },
+    {
+        name: 'SpysOne',
+        url: 'https://spys.one/en/free-proxy-list/',
+        parser: (html) => {
+            // SpysOne uses JavaScript to decode ports, but we can extract from script
+            // Format: document.write("<font class=spy2>:<\/font>"+(x1^x2)+(x3^x4)+...
+            // Fallback: extract IP and common ports pattern
+            const proxies = [];
+            
+            // Try to extract IPs and decode ports from the page
+            const ipMatches = [...html.matchAll(/(\d+\.\d+\.\d+\.\d+)/g)];
+            const portMatches = [...html.matchAll(/document\.write\([^)]*\+\((\w+)\^(\w+)\)/g)];
+            
+            // Extract variable definitions for port decoding
+            const varDefs = {};
+            const varMatches = [...html.matchAll(/(\w+)=(\d+)/g)];
+            for (const match of varMatches) {
+                varDefs[match[1]] = parseInt(match[2]);
+            }
+            
+            // Simple extraction: look for IP:port patterns in plain text
+            const simpleMatches = [...html.matchAll(/(\d+\.\d+\.\d+\.\d+)[:\s]+(\d{2,5})/g)];
+            for (const match of simpleMatches) {
+                const port = parseInt(match[2]);
+                if (port > 0 && port < 65536) {
+                    proxies.push({ ip: match[1], port: match[2], source: 'spysone' });
+                }
+            }
+            
+            // Deduplicate
+            const seen = new Set();
+            return proxies.filter(p => {
+                const key = `${p.ip}:${p.port}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+    },
+    {
+        name: 'OpenProxySpace',
+        url: 'https://openproxy.space/list/http',
+        parser: (text) => {
+            // OpenProxySpace returns a JSON-like format or plain text list
+            const proxies = [];
+            
+            try {
+                // Try JSON parse first
+                const json = JSON.parse(text);
+                if (Array.isArray(json)) {
+                    for (const item of json) {
+                        if (typeof item === 'string' && item.includes(':')) {
+                            const [ip, port] = item.split(':');
+                            proxies.push({ ip, port, source: 'openproxyspace' });
+                        } else if (item.ip && item.port) {
+                            proxies.push({ ip: item.ip, port: String(item.port), source: 'openproxyspace' });
+                        }
+                    }
+                } else if (json.data) {
+                    for (const item of json.data) {
+                        if (item.items) {
+                            for (const proxy of item.items) {
+                                const [ip, port] = proxy.split(':');
+                                if (ip && port) {
+                                    proxies.push({ ip, port, source: 'openproxyspace' });
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // Plain text format: one proxy per line
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (trimmed.includes(':')) {
+                        const [ip, port] = trimmed.split(':');
+                        if (ip && port && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
+                            proxies.push({ ip, port: port.trim(), source: 'openproxyspace' });
+                        }
+                    }
+                }
+            }
+            
+            return proxies;
+        }
+    },
+    {
+        name: 'ProxyListDownload',
+        url: 'https://www.proxy-list.download/api/v1/get?type=http',
+        parser: (text) => {
+            return text.split('\n')
+                .filter(line => line.includes(':'))
+                .map(line => {
+                    const [ip, port] = line.trim().split(':');
+                    return { ip, port, source: 'proxylistdownload' };
+                })
+                .filter(p => p.ip && p.port);
+        }
+    },
+    {
+        name: 'FreeProxyWorld',
+        url: 'https://www.freeproxy.world/?type=http&anonymity=&country=&speed=&port=&page=1',
+        parser: (html) => {
+            // Extract from table rows
+            const proxies = [];
+            const rowMatches = [...html.matchAll(/<td[^>]*>(\d+\.\d+\.\d+\.\d+)<\/td>\s*<td[^>]*><a[^>]*>(\d+)<\/a>/g)];
+            for (const match of rowMatches) {
+                proxies.push({ ip: match[1], port: match[2], source: 'freeproxyworld' });
+            }
+            
+            // Alternative pattern
+            const altMatches = [...html.matchAll(/(\d+\.\d+\.\d+\.\d+).*?<a[^>]*>(\d{2,5})<\/a>/gs)];
+            for (const match of altMatches) {
+                if (!proxies.find(p => p.ip === match[1])) {
+                    proxies.push({ ip: match[1], port: match[2], source: 'freeproxyworld' });
+                }
+            }
+            
+            return proxies;
+        }
+    },
+    {
+        name: 'HideMy',
+        url: 'https://hidemy.life/en/proxy-list/?type=h&anon=234',
+        parser: (html) => {
+            // HideMy.life table format
+            const proxies = [];
+            const matches = [...html.matchAll(/<td>(\d+\.\d+\.\d+\.\d+)<\/td>\s*<td>(\d+)<\/td>/g)];
+            for (const match of matches) {
+                proxies.push({ ip: match[1], port: match[2], source: 'hidemy' });
+            }
+            return proxies;
+        }
     }
 ];
 
 /** Configuration */
 const CONFIG = {
-    maxConcurrentChecks: 20,      // Check 20 proxies in parallel
-    checkTimeout: 3000,            // 3 second timeout per proxy
+    maxConcurrentChecks: 50,      // Check 50 proxies in parallel (high concurrency)
+    checkTimeout: 2000,            // 2 second timeout per proxy (fast)
     minWorkingProxies: 5,          // Minimum proxies to keep in cache
+    targetWorkingProxies: 15,      // Stop checking once we have this many
     cacheExpiry: 30 * 60 * 1000,   // Refresh cache every 30 minutes
     testUrl: 'https://httpbin.org/ip',  // Fast, reliable test endpoint
     rotationIndex: 0               // For round-robin rotation
@@ -163,19 +299,29 @@ async function checkProxy(proxy) {
 /**
  * Check proxies in parallel with limited concurrency
  * Uses a worker pool pattern for efficiency
+ * Stops early once we have enough working proxies
  */
 async function checkProxiesParallel(proxies) {
     const results = [];
     const queue = [...proxies];
     let completed = 0;
+    let stopEarly = false;
+    let resolveEarly;
+    
+    // Promise that resolves when we have enough proxies
+    const earlyStopPromise = new Promise(resolve => {
+        resolveEarly = resolve;
+    });
     
     // Worker function
     async function worker() {
-        while (queue.length > 0) {
+        while (queue.length > 0 && !stopEarly) {
             const proxy = queue.shift();
             if (!proxy) break;
             
             const result = await checkProxy(proxy);
+            if (stopEarly) break; // Check again after async operation
+            
             completed++;
             
             if (result) {
@@ -186,6 +332,18 @@ async function checkProxiesParallel(proxies) {
                     progress: `${completed}/${proxies.length}`,
                     working: results.length
                 }, 'Working proxy found');
+                
+                // Stop early if we have enough proxies
+                if (results.length >= CONFIG.targetWorkingProxies) {
+                    stopEarly = true;
+                    queue.length = 0; // Clear queue to stop other workers
+                    logger.info({ 
+                        working: results.length, 
+                        target: CONFIG.targetWorkingProxies 
+                    }, 'Reached target proxy count, stopping early');
+                    resolveEarly();
+                    break;
+                }
             }
             
             // Log progress every 20 proxies
@@ -201,7 +359,12 @@ async function checkProxiesParallel(proxies) {
     
     // Create worker pool
     const workers = Array(CONFIG.maxConcurrentChecks).fill(null).map(() => worker());
-    await Promise.all(workers);
+    
+    // Race between all workers completing OR early stop
+    await Promise.race([
+        Promise.all(workers),
+        earlyStopPromise
+    ]);
     
     // Sort by latency (fastest first)
     results.sort((a, b) => a.latency - b.latency);
@@ -238,9 +401,17 @@ export async function refreshProxyCache(force = false) {
         return workingProxies; // Return existing cache
     }
     
+    // Shuffle and limit proxies to test (for faster startup)
+    // Prioritize proxies from sources that typically have faster/better proxies
+    const prioritized = allProxies.sort((a, b) => {
+        const priority = { 'sslproxies': 1, 'freeproxylist': 2, 'proxylistdownload': 3 };
+        return (priority[a.source] || 5) - (priority[b.source] || 5);
+    });
+    const toTest = prioritized.slice(0, 200);  // Test first 200 prioritized proxies
+    
     // Check proxies in parallel
-    logger.info({ count: allProxies.length }, 'Validating proxies in parallel...');
-    const working = await checkProxiesParallel(allProxies);
+    logger.info({ count: toTest.length, total: allProxies.length }, 'Validating proxies in parallel...');
+    const working = await checkProxiesParallel(toTest);
     
     // Update cache
     workingProxies = working;

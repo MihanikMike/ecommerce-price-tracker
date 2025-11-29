@@ -1,0 +1,52 @@
+# =============================================================================
+# Docker Ignore - E-Commerce Price Tracker
+# =============================================================================
+
+# Git
+.git
+.gitignore
+
+# Dependencies (will be installed in container)
+node_modules
+
+# Environment files (use docker-compose env instead)
+.env
+.env.*
+!.env.example
+
+# Development files
+*.md
+!README.md
+docs/
+tests/
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs (will be created in container)
+logs/
+*.log
+
+# Exports (mounted as volume)
+exports/
+
+# Cache files
+.cache/
+proxy_cache.json
+
+# Docker files (not needed inside container)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Monitoring config (mounted separately)
+monitoring/

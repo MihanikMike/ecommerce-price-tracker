@@ -1,10 +1,11 @@
-import { chromium } from 'playwright';
+import { chromium, firefox } from 'playwright';
 import logger from './logger.js';
 import config from '../config/index.js';
 
 class BrowserPool {
-    constructor(size = 3) {
+    constructor(size = 3, browserType = 'firefox') {
         this.size = size;
+        this.browserType = browserType; // 'chromium' or 'firefox'
         this.browsers = [];
         this.available = [];
         this.waiting = [];
@@ -23,26 +24,37 @@ class BrowserPool {
             return;
         }
 
-        logger.info({ size: this.size }, 'Initializing browser pool');
+        logger.info({ size: this.size, browserType: this.browserType }, 'Initializing browser pool');
         
         try {
-            for (let i = 0; i < this.size; i++) {
-                const browser = await chromium.launch({
+            const launcher = this.browserType === 'firefox' ? firefox : chromium;
+            const launchOptions = this.browserType === 'firefox' 
+                ? {
+                    headless: config.scraper?.headless !== false,
+                  }
+                : {
                     headless: config.scraper?.headless !== false,
                     args: [
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
                         '--disable-dev-shm-usage',
-                        '--disable-gpu'
+                        '--disable-gpu',
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-infobars',
+                        '--window-size=1920,1080',
+                        '--start-maximized'
                     ]
-                });
+                  };
+            
+            for (let i = 0; i < this.size; i++) {
+                const browser = await launcher.launch(launchOptions);
                 this.browsers.push(browser);
                 this.available.push(browser);
                 logger.debug({ browserId: i + 1 }, 'Browser launched');
             }
             
             this.initialized = true;
-            logger.info({ size: this.size }, 'Browser pool ready');
+            logger.info({ size: this.size, browserType: this.browserType }, 'Browser pool ready');
         } catch (error) {
             logger.error({ error }, 'Failed to initialize browser pool');
             throw error;
@@ -54,18 +66,38 @@ class BrowserPool {
             throw new Error('Browser pool not initialized. Call initialize() first.');
         }
 
-        if (this.available.length > 0) {
+        while (this.available.length > 0) {
             const browser = this.available.pop();
-            this.stats.totalAcquired++;
-            this.stats.currentInUse++;
-            this.stats.peakInUse = Math.max(this.stats.peakInUse, this.stats.currentInUse);
             
-            logger.debug({ 
-                available: this.available.length,
-                inUse: this.stats.currentInUse 
-            }, 'Browser acquired');
-            
-            return browser;
+            // Check if browser is still connected
+            if (browser.isConnected()) {
+                this.stats.totalAcquired++;
+                this.stats.currentInUse++;
+                this.stats.peakInUse = Math.max(this.stats.peakInUse, this.stats.currentInUse);
+                
+                logger.debug({ 
+                    available: this.available.length,
+                    inUse: this.stats.currentInUse 
+                }, 'Browser acquired');
+                
+                return browser;
+            } else {
+                // Browser disconnected, create a replacement
+                logger.warn('Found disconnected browser, creating replacement');
+                try {
+                    const newBrowser = await chromium.launch({
+                        headless: true,
+                        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+                    });
+                    this.stats.totalAcquired++;
+                    this.stats.currentInUse++;
+                    this.stats.peakInUse = Math.max(this.stats.peakInUse, this.stats.currentInUse);
+                    return newBrowser;
+                } catch (error) {
+                    logger.error({ error }, 'Failed to create replacement browser');
+                    // Continue to try next available or wait
+                }
+            }
         }
 
         // Wait for browser to become available with timeout
@@ -101,6 +133,22 @@ class BrowserPool {
 
         this.stats.totalReleased++;
         this.stats.currentInUse--;
+
+        // Check if browser is still connected before reusing
+        if (!browser.isConnected()) {
+            logger.warn('Released browser is disconnected, not returning to pool');
+            // Async create replacement but don't await
+            chromium.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+            }).then(newBrowser => {
+                this.available.push(newBrowser);
+                logger.info('Replacement browser added to pool');
+            }).catch(err => {
+                logger.error({ error: err.message }, 'Failed to create replacement browser');
+            });
+            return;
+        }
 
         if (this.waiting.length > 0) {
             const waiter = this.waiting.shift();

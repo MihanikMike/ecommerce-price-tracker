@@ -1,138 +1,287 @@
 # E-Commerce Price Tracker
 
-A Node.js application that monitors and tracks prices of snowboard bindings from Amazon and Burton. The app scrapes product data, stores price history in MongoDB, and exports results to JSON.
+A Node.js application that monitors and tracks product prices across multiple e-commerce sites. Supports both URL-based tracking and search-based product discovery.
 
-## Features
+## ✨ Features
 
-- 🔍 **Multi-site scraping**: Supports Amazon and Burton websites
-- 📊 **Price history tracking**: Stores historical price data in MongoDB
-- 🎭 **Headless browser automation**: Uses Playwright for reliable web scraping
-- 💾 **Data export**: Automatically exports all tracked products to JSON
-- 🔄 **Automatic updates**: Tracks price changes over time
+- 🔍 **Multi-site scraping**: Amazon, Burton, Target, Best Buy, Walmart, Newegg, B&H Photo
+- 🔎 **Search-based tracking**: Track products by name without needing URLs
+- 📊 **Price history**: Stores historical price data in PostgreSQL
+- 🎭 **Headless browser**: Uses Playwright with Firefox for reliable scraping
+- 🔄 **Smart scheduling**: Per-product check intervals with rate limiting
+- 🛡️ **Anti-detection**: Rotating user agents, proxies, and delays
+- 📈 **Monitoring**: Prometheus metrics + Grafana dashboards
+- 🐳 **Docker support**: Full containerized deployment
+- ❤️ **Health checks**: `/health`, `/ready`, `/live`, `/metrics` endpoints
 
-## Prerequisites
+## 🚀 Quick Start
 
-- Node.js (v16 or higher)
-- MongoDB (running locally on port 27017 or remote instance)
+### Prerequisites
 
-## Installation
+- Node.js 20+
+- PostgreSQL 14+
+- Firefox (installed by Playwright)
 
-1. Clone the repository:
+### Installation
+
 ```bash
+# Clone the repository
 git clone https://github.com/MihanikMike/ecommerce-price-tracker.git
 cd ecommerce-price-tracker
-```
 
-2. Install dependencies:
-```bash
+# Install dependencies
 npm install
+
+# Install Firefox browser
+npx playwright install firefox
+
+# Copy environment template
+cp .env.example .env
+# Edit .env with your PostgreSQL credentials
 ```
 
-3. Install Playwright browsers:
+### Configure Database
+
+Edit `.env`:
+```env
+PG_HOST=localhost
+PG_PORT=5432
+PG_USER=your_username
+PG_PASSWORD=your_password
+PG_DATABASE=price_tracker
+```
+
+### Run Migrations
+
 ```bash
-npx playwright install chromium
+npm run migrate
 ```
 
-4. Start MongoDB (if running locally):
+### Start the App
+
 ```bash
-# Using Docker
-docker run -d -p 27017:27017 mongo
-
-# Or start your local MongoDB service
+npm start
 ```
 
-## Configuration
+## 🐳 Docker Deployment
 
-Set the MongoDB connection string (optional):
+### Full Stack (App + Database + Monitoring)
+
 ```bash
-export MONGO_URI="mongodb://localhost:27017"
+docker compose up -d
+
+# Access:
+# - App Health: http://localhost:3000/health
+# - Prometheus: http://localhost:9090
+# - Grafana: http://localhost:3001 (admin/pricetracker123)
 ```
 
-Default connection: `mongodb://localhost:27017`
+### Development (Database only)
 
-## Usage
-
-Run the price monitor:
 ```bash
-node src/index.js
+docker compose -f docker-compose.dev.yml up -d
+npm start
 ```
 
-The application will:
-1. Connect to MongoDB
-2. Scrape product data from configured URLs
-3. Save price history to the database
-4. Export all products to `products.json`
-5. Close database connection
+## 📦 Managing Products
 
-## Project Structure
+### List Products
+```bash
+npm run products:list
+```
+
+### Add URL-based Product
+```bash
+node src/cli/products.js add-url "https://www.amazon.com/dp/B09V3KXJPB"
+```
+
+### Add Search-based Product
+```bash
+node src/cli/products.js add-search "PlayStation 5"
+node src/cli/products.js add-search "Sony WH-1000XM5" headphones wireless
+```
+
+### Update/Remove Products
+```bash
+# Update product name
+node src/cli/products.js update 4 product_name "iPhone 16 Pro"
+
+# Change check interval (minutes)
+node src/cli/products.js update 4 check_interval_minutes 30
+
+# Disable/Enable
+node src/cli/products.js disable 4
+node src/cli/products.js enable 4
+
+# Remove
+node src/cli/products.js remove 4
+```
+
+### Search Products (without tracking)
+```bash
+node src/cli/search.js search "AirPods Pro"
+```
+
+## 🛠️ CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm start` | Run price monitoring |
+| `npm run migrate` | Run database migrations |
+| `npm run seed` | Seed initial products |
+| `npm run products:list` | List tracked products |
+| `npm run products:help` | Product management help |
+| `npm run search` | Search for products |
+| `npm run view-db` | View database contents |
+| `npm run check-db` | Check database health |
+| `npm run check-pool` | Check browser pool status |
+
+## 📁 Project Structure
 
 ```
 ecommerce-price-tracker/
 ├── src/
-│   ├── index.js                 # Application entry point
+│   ├── index.js              # Application entry point
+│   ├── cli/                  # CLI tools
+│   │   ├── products.js       # Product management
+│   │   ├── search.js         # Search products
+│   │   ├── migrate.js        # Run migrations
+│   │   └── view-db.js        # View database
+│   ├── config/
+│   │   └── index.js          # Configuration + validation
 │   ├── db/
-│   │   ├── connect.js          # MongoDB connection management
-│   │   └── models/
-│   │       └── Product.js      # Product data model
+│   │   ├── connect-pg.js     # PostgreSQL connection
+│   │   ├── productRepository.js
+│   │   ├── trackedProductsRepository.js
+│   │   └── migrations/       # SQL migrations
 │   ├── monitor/
-│   │   └── price-monitor.js    # Main monitoring logic
+│   │   ├── price-monitor.js  # URL-based monitoring
+│   │   └── search-monitor.js # Search-based monitoring
 │   ├── scraper/
-│   │   ├── amazon.js           # Amazon scraper
-│   │   └── burton.js           # Burton scraper
+│   │   ├── amazon.js         # Amazon scraper
+│   │   └── burton.js         # Burton scraper
+│   ├── search/
+│   │   ├── direct-search.js  # Direct site search
+│   │   ├── search-engine.js  # Bing search
+│   │   └── universal-scraper.js
+│   ├── server/
+│   │   └── health-server.js  # Health endpoints
 │   └── utils/
-│       └── fetch-page.js       # Playwright page fetcher
-├── package.json
-└── readme.md
+│       ├── BrowserPool.js    # Browser management
+│       ├── rate-limiter.js   # Per-site rate limiting
+│       ├── proxy-manager.js  # Proxy rotation
+│       ├── validation.js     # Input validation
+│       └── metrics.js        # Prometheus metrics
+├── monitoring/               # Prometheus + Grafana config
+├── docker-compose.yml        # Full stack deployment
+├── docker-compose.dev.yml    # Development setup
+├── Dockerfile
+└── package.json
 ```
 
-## Adding New Products
+## 📊 Database Schema
 
-Edit `src/monitor/price-monitor.js` and add URLs to the `bindingsUrls` array:
-
-```javascript
-const bindingsUrls = [
-    "https://www.amazon.com/dp/YOUR_PRODUCT_ID",
-    "https://www.burton.com/us/en/p/your-product-url",
-];
+### Products
+```sql
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    url TEXT UNIQUE NOT NULL,
+    site TEXT NOT NULL,
+    title TEXT,
+    last_seen_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW()
+);
 ```
 
-## Database Schema
-
-Products are stored with the following structure:
-```javascript
-{
-  url: "product-url",
-  title: "Product Title",
-  history: [
-    {
-      site: "Amazon" or "Burton",
-      url: "product-url",
-      title: "Product Title",
-      price: 279.95,
-      timestamp: Date
-    }
-  ]
-}
+### Price History
+```sql
+CREATE TABLE price_history (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES products(id),
+    price DECIMAL(10, 2) NOT NULL,
+    currency TEXT DEFAULT 'USD',
+    captured_at TIMESTAMP DEFAULT NOW()
+);
 ```
 
-## Troubleshooting
+### Tracked Products
+```sql
+CREATE TABLE tracked_products (
+    id SERIAL PRIMARY KEY,
+    url TEXT UNIQUE,
+    product_name TEXT,
+    site TEXT NOT NULL,
+    enabled BOOLEAN DEFAULT true,
+    check_interval_minutes INTEGER DEFAULT 60,
+    tracking_mode TEXT DEFAULT 'url',
+    last_checked_at TIMESTAMP,
+    next_check_at TIMESTAMP
+);
+```
 
-**MongoDB connection error:**
-- Ensure MongoDB is running
-- Check the connection string in environment variables
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PG_HOST` | localhost | PostgreSQL host |
+| `PG_PORT` | 5432 | PostgreSQL port |
+| `PG_USER` | - | Database user (required) |
+| `PG_PASSWORD` | - | Database password (required) |
+| `PG_DATABASE` | - | Database name (required) |
+| `PORT` | 3000 | Health server port |
+| `LOG_LEVEL` | info | Logging level |
+| `SCRAPER_USE_PROXY` | false | Enable proxy rotation |
+| `SCRAPER_HEADLESS` | true | Run browser headless |
+| `SCRAPER_TIMEOUT` | 30000 | Page load timeout (ms) |
+
+## 📈 Monitoring
+
+### Health Endpoints
+
+- `GET /health` - Full health check with component status
+- `GET /ready` - Readiness probe (Kubernetes)
+- `GET /live` - Liveness probe (Kubernetes)
+- `GET /metrics` - Prometheus metrics
+
+### Grafana Dashboard
+
+Pre-configured dashboard includes:
+- Scrape success rate
+- Response times
+- Price changes detected
+- Browser pool usage
+- Database connections
+
+## 🛡️ Anti-Detection Features
+
+- Firefox browser (less detected than Chrome)
+- Random user agent rotation
+- Per-site rate limiting with adaptive backoff
+- Random delays between requests
+- Proxy support (free/paid providers)
+
+## 🐛 Troubleshooting
+
+**Database connection error:**
+- Verify PostgreSQL is running
+- Check credentials in `.env`
+- Run `npm run check-db`
 
 **Scraping errors:**
-- Website selectors may change; update selectors in scraper files
-- Check internet connection
-- Some sites may block automated requests
+- Site may have changed selectors
+- Rate limited - wait and retry
+- Try without proxy: `SCRAPER_USE_PROXY=false`
 
-**Playwright errors:**
-- Run `npx playwright install chromium` to install browser
+**Browser errors:**
+- Run `npx playwright install firefox`
+- Check `npm run check-pool`
 
-## License
+## 📝 License
 
 ISC
 
-## Author
+## 👤 Author
 
 MihanikMike

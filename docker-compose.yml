@@ -1,6 +1,81 @@
-version: '3.8'
+# =============================================================================
+# E-Commerce Price Tracker - Docker Compose
+# =============================================================================
+# Services:
+#   - app: Main price tracker application
+#   - postgres: PostgreSQL database
+#   - prometheus: Metrics collection
+#   - grafana: Visualization dashboards
+# =============================================================================
 
 services:
+  # ===========================================
+  # APPLICATION
+  # ===========================================
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: price-tracker-app
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_USER=${PG_USER:-pricetracker}
+      - PG_PASSWORD=${PG_PASSWORD:-pricetracker123}
+      - PG_DATABASE=${PG_DATABASE:-pricetracker}
+      - PG_POOL_MAX=10
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SCRAPER_USE_PROXY=${SCRAPER_USE_PROXY:-false}
+      - SCRAPER_HEADLESS=true
+      - SCRAPER_TIMEOUT=30000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./exports:/app/exports
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+      - monitoring
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ===========================================
+  # DATABASE
+  # ===========================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: price-tracker-postgres
+    environment:
+      - POSTGRES_USER=${PG_USER:-pricetracker}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-pricetracker123}
+      - POSTGRES_DB=${PG_DATABASE:-pricetracker}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/db/migrations:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-pricetracker} -d ${PG_DATABASE:-pricetracker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # ===========================================
   # MONITORING STACK
   # ===========================================
@@ -47,9 +122,12 @@ services:
       - monitoring
 
 volumes:
+  postgres_data:
   prometheus_data:
   grafana_data:
 
 networks:
+  app-network:
+    driver: bridge
   monitoring:
     driver: bridge

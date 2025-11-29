@@ -287,6 +287,82 @@ LOG_LEVEL=debug npm start
 npm start 2>&1 | grep -i "validation"
 ```
 
+---
+
+## 🐳 Docker Deployment
+
+### Quick Start with Docker
+
+**Option 1: Full Stack (App + Database + Monitoring)**
+```bash
+# Start everything
+docker compose up -d
+
+# View logs
+docker compose logs -f app
+
+# Check status
+docker compose ps
+```
+
+**Access:**
+- App Health: http://localhost:3000/health
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3001 (admin/pricetracker123)
+
+**Option 2: Development (Database only)**
+```bash
+# Start only PostgreSQL
+docker compose -f docker-compose.dev.yml up -d
+
+# Run app locally
+npm run migrate
+npm start
+```
+
+**Option 3: Database + Admin UI**
+```bash
+docker compose -f docker-compose.dev.yml up -d
+
+# Access Adminer at http://localhost:8080
+# Server: postgres, User: pricetracker, Password: pricetracker123
+```
+
+### Docker Commands
+
+```bash
+# Build the app image
+docker compose build app
+
+# Start services
+docker compose up -d
+
+# Stop services
+docker compose down
+
+# View logs
+docker compose logs -f app
+
+# Restart app after code changes
+docker compose up -d --build app
+
+# Clean up everything (including volumes)
+docker compose down -v
+```
+
+### Environment Variables
+
+Create a `.env` file for custom settings:
+```env
+PG_USER=pricetracker
+PG_PASSWORD=your_secure_password
+PG_DATABASE=pricetracker
+LOG_LEVEL=info
+SCRAPER_USE_PROXY=false
+```
+
+---
+
 ## 🚀 Next Steps (Optional)
 
 After everything works:
@@ -307,6 +383,6 @@ After everything works:
 
 ---
 
-**Status:** ✅ Your project is now production-ready with proper validation, retry logic, and monitoring!
+**Status:** ✅ Your project is now production-ready with proper validation, retry logic, monitoring, and Docker support!
 
 **Authentication:** Configured for PostgreSQL user `mike228` (not postgres superuser)

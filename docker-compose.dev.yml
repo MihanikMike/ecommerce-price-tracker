@@ -1,0 +1,50 @@
+# =============================================================================
+# E-Commerce Price Tracker - Development Docker Compose
+# =============================================================================
+# Lighter weight setup for development:
+#   - PostgreSQL only (run app locally with npm start)
+#   - Optional monitoring stack
+# 
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up -d postgres
+#   npm run migrate && npm start
+# =============================================================================
+
+services:
+  # ===========================================
+  # DATABASE
+  # ===========================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: price-tracker-postgres-dev
+    environment:
+      - POSTGRES_USER=pricetracker
+      - POSTGRES_PASSWORD=pricetracker123
+      - POSTGRES_DB=pricetracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pricetracker -d pricetracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # ADMINER - Database UI (optional)
+  # ===========================================
+
+  adminer:
+    image: adminer:latest
+    container_name: price-tracker-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_dev_data:
