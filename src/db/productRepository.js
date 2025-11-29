@@ -1,10 +1,21 @@
 import { pool } from "./connect-pg.js";
 import logger from "../utils/logger.js";
+import { validateScrapedData, logValidationErrors } from "../utils/validation.js";
 
 /**
  * Insert or update product and add price history entry
  */
 export async function upsertProductAndHistory({ url, site, title, price, currency = 'USD' }) {
+    // Validate input data
+    const validation = validateScrapedData({ url, site, title, price, currency });
+    if (!validation.valid) {
+        logValidationErrors('upsertProductAndHistory', validation.errors);
+        throw new Error(`Validation failed: ${validation.errors.join('; ')}`);
+    }
+    
+    // Use sanitized data
+    const data = validation.sanitized;
+    
     const client = await pool.connect();
     
     try {
@@ -20,7 +31,7 @@ export async function upsertProductAndHistory({ url, site, title, price, currenc
                 site = EXCLUDED.site,
                 last_seen_at = NOW()
              RETURNING id`,
-            [url, site, title]
+            [data.url, data.site, data.title]
         );
         
         const productId = productResult.rows[0].id;
@@ -29,18 +40,18 @@ export async function upsertProductAndHistory({ url, site, title, price, currenc
         await client.query(
             `INSERT INTO price_history (product_id, price, currency, captured_at) 
              VALUES ($1, $2, $3, NOW())`,
-            [productId, price, currency]
+            [productId, data.price, data.currency]
         );
         
         await client.query('COMMIT');
         
-        logger.debug({ productId, url, price }, 'Product and price history saved');
+        logger.debug({ productId, url: data.url, price: data.price }, 'Product and price history saved');
         
         return productId;
         
     } catch (error) {
         await client.query('ROLLBACK');
-        logger.error({ error, url }, 'Failed to save product');
+        logger.error({ error, url: data?.url || url }, 'Failed to save product');
         throw error;
     } finally {
         client.release();
@@ -74,12 +85,22 @@ export async function getAllProductsWithLatestPrice() {
  * Get price history for a product
  */
 export async function getPriceHistory(productId, limit = 100) {
+    // Validate product ID
+    const { validateProductId } = await import('../utils/validation.js');
+    const validation = validateProductId(productId);
+    if (!validation.valid) {
+        throw new Error(`Invalid product ID: ${validation.errors.join('; ')}`);
+    }
+    
+    // Validate limit
+    const sanitizedLimit = Math.max(1, Math.min(1000, parseInt(limit, 10) || 100));
+    
     const result = await pool.query(
         `SELECT * FROM price_history 
          WHERE product_id = $1 
          ORDER BY captured_at DESC 
          LIMIT $2`,
-        [productId, limit]
+        [validation.sanitized, sanitizedLimit]
     );
     return result.rows;
 }

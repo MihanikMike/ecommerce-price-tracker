@@ -1,5 +1,6 @@
 import { pool } from './connect-pg.js';
 import logger from '../utils/logger.js';
+import { validateTrackedProduct, validateProductId, logValidationErrors } from '../utils/validation.js';
 
 /**
  * Get all enabled products that need to be checked
@@ -30,6 +31,12 @@ export async function getProductsToCheck(limit = 100) {
  * @param {boolean} success - Whether the check was successful
  */
 export async function updateProductCheckTime(productId, success = true) {
+    // Validate product ID
+    const validation = validateProductId(productId);
+    if (!validation.valid) {
+        throw new Error(`Invalid product ID: ${validation.errors.join('; ')}`);
+    }
+    
     try {
         const client = await pool.connect();
         try {
@@ -38,7 +45,7 @@ export async function updateProductCheckTime(productId, success = true) {
             // Get the check interval
             const product = await client.query(
                 'SELECT check_interval_minutes FROM tracked_products WHERE id = $1',
-                [productId]
+                [validation.sanitized]
             );
 
             if (product.rows.length === 0) {
@@ -53,7 +60,7 @@ export async function updateProductCheckTime(productId, success = true) {
                 SET last_checked_at = NOW(),
                     next_check_at = $1
                 WHERE id = $2
-            `, [nextCheck, productId]);
+            `, [nextCheck, validation.sanitized]);
 
             await client.query('COMMIT');
             
@@ -76,6 +83,15 @@ export async function updateProductCheckTime(productId, success = true) {
  * @returns {Promise<number>} The ID of the created product
  */
 export async function addTrackedProduct({ url, site, enabled = true, checkIntervalMinutes = 60 }) {
+    // Validate input
+    const validation = validateTrackedProduct({ url, site, enabled, checkIntervalMinutes });
+    if (!validation.valid) {
+        logValidationErrors('addTrackedProduct', validation.errors);
+        throw new Error(`Validation failed: ${validation.errors.join('; ')}`);
+    }
+    
+    const data = validation.sanitized;
+    
     try {
         const result = await pool.query(
             `INSERT INTO tracked_products (url, site, enabled, check_interval_minutes)
@@ -83,13 +99,13 @@ export async function addTrackedProduct({ url, site, enabled = true, checkInterv
              ON CONFLICT (url) DO UPDATE 
              SET enabled = $3, check_interval_minutes = $4, updated_at = NOW()
              RETURNING id`,
-            [url, site, enabled, checkIntervalMinutes]
+            [data.url, data.site, data.enabled, data.checkIntervalMinutes]
         );
         
-        logger.info({ id: result.rows[0].id, url, site }, 'Added tracked product');
+        logger.info({ id: result.rows[0].id, url: data.url, site: data.site }, 'Added tracked product');
         return result.rows[0].id;
     } catch (error) {
-        logger.error({ error, url }, 'Failed to add tracked product');
+        logger.error({ error, url: data?.url || url }, 'Failed to add tracked product');
         throw error;
     }
 }
@@ -100,11 +116,26 @@ export async function addTrackedProduct({ url, site, enabled = true, checkInterv
  * @param {boolean} enabled - Enable or disable
  */
 export async function setProductEnabled(productId, enabled) {
+    // Validate product ID
+    const idValidation = validateProductId(productId);
+    if (!idValidation.valid) {
+        throw new Error(`Invalid product ID: ${idValidation.errors.join('; ')}`);
+    }
+    
+    // Validate enabled flag
+    if (typeof enabled !== 'boolean') {
+        throw new Error('Enabled must be a boolean value');
+    }
+    
     try {
-        await pool.query(
-            'UPDATE tracked_products SET enabled = $1, updated_at = NOW() WHERE id = $2',
-            [enabled, productId]
+        const result = await pool.query(
+            'UPDATE tracked_products SET enabled = $1, updated_at = NOW() WHERE id = $2 RETURNING id',
+            [enabled, idValidation.sanitized]
         );
+        
+        if (result.rows.length === 0) {
+            throw new Error(`Product ${productId} not found`);
+        }
         
         logger.info({ productId, enabled }, 'Updated product enabled status');
     } catch (error) {
@@ -136,9 +167,20 @@ export async function getAllTrackedProducts() {
  * @param {number} productId - Product ID
  */
 export async function deleteTrackedProduct(productId) {
+    // Validate product ID
+    const validation = validateProductId(productId);
+    if (!validation.valid) {
+        throw new Error(`Invalid product ID: ${validation.errors.join('; ')}`);
+    }
+    
     try {
-        await pool.query('DELETE FROM tracked_products WHERE id = $1', [productId]);
-        logger.info({ productId }, 'Deleted tracked product');
+        const result = await pool.query('DELETE FROM tracked_products WHERE id = $1 RETURNING id', [validation.sanitized]);
+        
+        if (result.rows.length === 0) {
+            throw new Error(`Product ${productId} not found`);
+        }
+        
+        logger.info({ productId: validation.sanitized }, 'Deleted tracked product');
     } catch (error) {
         logger.error({ error, productId }, 'Failed to delete tracked product');
         throw error;

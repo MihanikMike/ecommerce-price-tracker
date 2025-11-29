@@ -5,8 +5,19 @@ import { upsertProductAndHistory, getAllProductsWithLatestPrice } from "../db/pr
 import { getProductsToCheck, updateProductCheckTime } from "../db/trackedProductsRepository.js";
 import { exportToJSON } from "../services/exportService.js";
 import { retry } from "../utils/retry.js";
-import { delay } from "../utils/delay.js";
+import { rateLimiter } from "../utils/rate-limiter.js";
+import { recordScrapeAttempt, recordError } from "../server/health-server.js";
+import { recordScrape, recordPriceChange, recordRateLimitDelay, lastSuccessfulRun, monitoringCycleDuration } from "../utils/metrics.js";
 import config from "../config/index.js";
+
+/**
+ * Get site name from URL for metrics
+ */
+function getSiteFromUrl(url) {
+    if (url.includes("amazon.com")) return 'amazon';
+    if (url.includes("burton.com")) return 'burton';
+    return 'unknown';
+}
 
 /**
  * Determine which scraper to use based on URL
@@ -18,16 +29,28 @@ function getScraperForUrl(url) {
 }
 
 /**
- * Scrape a single product with retry logic
+ * Scrape a single product with retry logic and rate limiting
  */
 async function scrapeProductWithRetry(url) {
     const scraperInfo = getScraperForUrl(url);
+    const site = getSiteFromUrl(url);
     
     if (!scraperInfo) {
         logger.warn({ url }, 'No scraper available for URL');
         return null;
     }
 
+    // Wait for rate limit before making request
+    const delayApplied = await rateLimiter.waitForRateLimit(url);
+    logger.debug({ url, delayMs: delayApplied, site: scraperInfo.name }, 'Rate limit delay applied');
+    
+    // Record rate limit delay in metrics
+    if (delayApplied > 0) {
+        recordRateLimitDelay(site, delayApplied / 1000);
+    }
+
+    const startTime = Date.now();
+    
     try {
         const data = await retry(
             () => scraperInfo.scraper(url),
@@ -38,9 +61,28 @@ async function scrapeProductWithRetry(url) {
             }
         );
 
+        const durationSeconds = (Date.now() - startTime) / 1000;
+
+        // Report success to rate limiter
+        if (data) {
+            rateLimiter.reportSuccess(url);
+            recordScrapeAttempt(true);
+            recordScrape(site, true, durationSeconds);
+        } else {
+            recordScrapeAttempt(false);
+            recordScrape(site, false, durationSeconds);
+        }
+
         return data;
         
     } catch (error) {
+        const durationSeconds = (Date.now() - startTime) / 1000;
+        
+        // Report error to rate limiter (may increase backoff)
+        rateLimiter.reportError(url, error);
+        recordScrapeAttempt(false);
+        recordError(error);
+        recordScrape(site, false, durationSeconds);
         logger.error({ error, url, scraper: scraperInfo.name }, 'Failed to scrape product after retries');
         return null;
     }
@@ -148,6 +190,14 @@ export async function runPriceMonitor() {
     }
 
     const duration = Date.now() - startTime;
+    const durationSeconds = duration / 1000;
+    
+    // Record metrics
+    monitoringCycleDuration.observe(durationSeconds);
+    if (results.successful > 0) {
+        lastSuccessfulRun.set(Date.now() / 1000);
+    }
+    
     logger.info({ results, durationMs: duration }, 'Price monitoring cycle completed');
 
     return results;

@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # E-Commerce Price Tracker
+  - job_name: 'price-tracker'
+    # Adjust this to your app's host
+    # Use 'host.docker.internal' on Docker Desktop (Mac/Windows)
+    # Use '172.17.0.1' on Linux Docker
+    # Or use 'localhost' if running outside Docker
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+        labels:
+          app: 'price-tracker'
+          env: 'development'
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 5s

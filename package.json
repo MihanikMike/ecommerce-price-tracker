@@ -8,6 +8,10 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "migrate": "node src/cli/migrate.js",
+    "seed": "node src/cli/seed.js",
+    "check-pool": "node src/cli/check-pool.js",
+    "check-db": "node src/cli/check-db.js",
+    "view-db": "node src/cli/view-db.js",
     "test": "NODE_ENV=test jest",
     "test:watch": "NODE_ENV=test jest --watch",
     "test:coverage": "NODE_ENV=test jest --coverage",
@@ -33,6 +37,7 @@
     "pino-pretty": "^11.3.0",
     "playwright": "^1.57.0",
     "playwright-extra": "^4.3.6",
+    "prom-client": "^15.1.3",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "devDependencies": {

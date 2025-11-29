@@ -49,6 +49,19 @@ export async function checkDatabaseHealth() {
     }
 }
 
+// Get connection pool statistics
+export function getPoolStats() {
+    return {
+        totalCount: pool.totalCount,      // Total number of clients in pool
+        idleCount: pool.idleCount,        // Number of idle clients
+        waitingCount: pool.waitingCount,  // Number of queued requests waiting for a client
+        maxConnections: config.pg.max,    // Maximum pool size
+        utilizationPercent: pool.totalCount > 0 
+            ? Math.round(((pool.totalCount - pool.idleCount) / pool.totalCount) * 100)
+            : 0
+    };
+}
+
 // Migration runner with tracking
 export async function runMigrations() {
     const client = await pool.connect();
