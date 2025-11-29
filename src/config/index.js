@@ -12,6 +12,10 @@ const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 3000,
   
+  // Servers
+  healthPort: parseInt(process.env.HEALTH_PORT, 10) || 3000,
+  apiPort: parseInt(process.env.API_PORT, 10) || 3001,
+  
   // PostgreSQL
   pg: {
     host: process.env.PG_HOST || 'localhost',
@@ -38,12 +42,47 @@ const config = {
   log: {
     level: process.env.LOG_LEVEL || 'info',
     prettyPrint: process.env.NODE_ENV === 'development',
+    // File logging with rotation
+    toFile: process.env.LOG_TO_FILE === 'true',
+    toConsole: process.env.LOG_TO_CONSOLE !== 'false', // Default: true
+    // Rotation settings
+    rotationFrequency: process.env.LOG_ROTATION_FREQUENCY || 'daily', // 'daily', 'hourly'
+    maxFileSize: process.env.LOG_MAX_FILE_SIZE || '10m', // 10 MB per file
+    separateErrorLog: process.env.LOG_SEPARATE_ERRORS === 'true',
   },
   
   // Paths
   paths: {
     userAgents: process.env.USER_AGENTS_FILE || path.join(__dirname, '../../data/useragents.txt'),
     exports: process.env.EXPORTS_DIR || path.join(__dirname, '../../exports'),
+  },
+
+  // Price Change Detection
+  priceChange: {
+    // Minimum absolute price change to consider significant (in currency units)
+    minAbsoluteChange: parseFloat(process.env.PRICE_MIN_ABSOLUTE_CHANGE) || 1.00,
+    // Minimum percentage change to consider significant
+    minPercentChange: parseFloat(process.env.PRICE_MIN_PERCENT_CHANGE) || 5,
+    // Price drop threshold for alerts (percentage)
+    alertDropThreshold: parseFloat(process.env.PRICE_ALERT_DROP_THRESHOLD) || 10,
+    // Price increase threshold for alerts (percentage)
+    alertIncreaseThreshold: parseFloat(process.env.PRICE_ALERT_INCREASE_THRESHOLD) || 20,
+  },
+
+  // Data Retention Policy
+  retention: {
+    // Keep detailed price history for this many days
+    priceHistoryDays: parseInt(process.env.RETENTION_PRICE_HISTORY_DAYS, 10) || 90,
+    // Keep at least this many price records per product (even if older than retention)
+    minPriceRecordsPerProduct: parseInt(process.env.RETENTION_MIN_RECORDS, 10) || 10,
+    // Remove products not seen for this many days
+    staleProductDays: parseInt(process.env.RETENTION_STALE_PRODUCT_DAYS, 10) || 180,
+    // Remove search results older than this many days
+    searchResultDays: parseInt(process.env.RETENTION_SEARCH_RESULT_DAYS, 10) || 30,
+    // Batch size for delete operations
+    deleteBatchSize: parseInt(process.env.RETENTION_DELETE_BATCH_SIZE, 10) || 1000,
+    // Keep daily price samples for historical analysis
+    keepDailySamples: process.env.RETENTION_KEEP_DAILY_SAMPLES !== 'false',
   },
 };
 

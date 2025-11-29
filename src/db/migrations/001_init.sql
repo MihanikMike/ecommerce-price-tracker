@@ -1,4 +1,4 @@
--- products: основной продукт
+-- products: main product table
 CREATE TABLE IF NOT EXISTS products (
   id SERIAL PRIMARY KEY,
   url TEXT UNIQUE NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS products (
   last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- history: история цен
+-- price_history: stores historical price data
 CREATE TABLE IF NOT EXISTS price_history (
   id SERIAL PRIMARY KEY,
   product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
@@ -17,6 +17,6 @@ CREATE TABLE IF NOT EXISTS price_history (
   captured_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- индексы
+-- indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_url ON products(url);
 CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id);

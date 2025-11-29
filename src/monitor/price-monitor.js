@@ -4,10 +4,11 @@ import { scrapeBurton } from "../scraper/burton.js";
 import { upsertProductAndHistory, getAllProductsWithLatestPrice } from "../db/productRepository.js";
 import { getProductsToCheck, updateProductCheckTime } from "../db/trackedProductsRepository.js";
 import { exportToJSON } from "../services/exportService.js";
+import { detectPriceChange } from "../services/priceChangeService.js";
 import { retry } from "../utils/retry.js";
 import { rateLimiter } from "../utils/rate-limiter.js";
 import { recordScrapeAttempt, recordError } from "../server/health-server.js";
-import { recordScrape, recordPriceChange, recordRateLimitDelay, lastSuccessfulRun, monitoringCycleDuration } from "../utils/metrics.js";
+import { recordScrape, recordRateLimitDelay, lastSuccessfulRun, monitoringCycleDuration } from "../utils/metrics.js";
 import config from "../config/index.js";
 
 /**
@@ -106,6 +107,24 @@ async function processProduct(trackedProduct) {
     try {
         const productId = await upsertProductAndHistory(data);
         await updateProductCheckTime(trackedProductId, true);
+        
+        // Detect price changes
+        const site = data.site || 'unknown';
+        const changeResult = await detectPriceChange(productId, site);
+        
+        if (changeResult.detected && changeResult.alert?.shouldAlert) {
+            logger.warn({
+                productId,
+                url,
+                title: data.title,
+                oldPrice: changeResult.oldPrice,
+                newPrice: changeResult.newPrice,
+                change: `${changeResult.change.percentChange}%`,
+                alertReason: changeResult.alert.reason,
+                severity: changeResult.alert.severity,
+            }, `🚨 Price ${changeResult.change.direction === 'down' ? 'DROP' : 'INCREASE'} alert!`);
+        }
+        
         logger.info({ productId, trackedProductId, url, title: data.title, price: data.price }, 'Product saved successfully');
         return true;
         

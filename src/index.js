@@ -6,6 +6,7 @@ import { runPriceMonitor } from './monitor/price-monitor.js';
 import { runSearchMonitor } from './monitor/search-monitor.js';
 import { testDatabaseConnection } from './utils/db-retry.js';
 import { startHealthServer, stopHealthServer, updateAppState } from './server/health-server.js';
+import { startApiServer, stopApiServer } from './server/api-server.js';
 
 // Validate configuration before starting
 validateConfigOrExit();
@@ -20,7 +21,11 @@ async function shutdown(signal) {
     logger.info(`Received ${signal}, starting graceful shutdown...`);
 
     try {
-        // Stop health server first
+        // Stop API server first
+        await stopApiServer();
+        logger.info('API server stopped');
+
+        // Stop health server
         await stopHealthServer();
         logger.info('Health server stopped');
 
@@ -101,6 +106,10 @@ async function main() {
         // Start health check server
         const healthPort = await startHealthServer(process.env.HEALTH_PORT || 3000);
         logger.info({ port: healthPort }, 'Health check server ready');
+
+        // Start API server
+        const apiPort = await startApiServer(process.env.API_PORT || 3001);
+        logger.info({ port: apiPort }, 'API server ready');
 
         // Mark application as ready
         updateAppState({ isReady: true });

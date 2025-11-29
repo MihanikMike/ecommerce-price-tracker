@@ -49,3 +49,9 @@ build/
 .cache/
 temp/
 tmp/
+
+# Database backups
+backups/
+
+# Application logs
+logs/
