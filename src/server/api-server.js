@@ -110,7 +110,8 @@ class Router {
                 route.paramNames.forEach((name, i) => {
                     params[name] = match[i + 1];
                 });
-                return await route.handler(req, res, params);
+                await route.handler(req, res, params);
+                return true;  // Handler was found and executed
             }
         }
         return false;
@@ -446,6 +447,10 @@ router.post('/tracked', async (req, res, params) => {
         });
     } catch (error) {
         logger.error({ error }, 'API error: POST /tracked');
+        // Return 400 for validation errors
+        if (error.message && error.message.includes('Validation failed')) {
+            return sendError(res, 400, 'Invalid request', error.message);
+        }
         sendError(res, 500, 'Failed to add tracked product', error.message);
     }
 });
@@ -779,7 +784,9 @@ async function handleRequest(req, res) {
         }
     } catch (error) {
         logger.error({ error, path: apiPath, method: req.method }, 'API request error');
-        sendError(res, 500, 'Internal Server Error', error.message);
+        if (!res.headersSent) {
+            sendError(res, 500, 'Internal Server Error', error.message);
+        }
     }
 }
 
@@ -800,13 +807,15 @@ export async function startApiServer(port = DEFAULT_PORT) {
         });
 
         server.listen(port, () => {
-            logger.info({ port }, 'API server started');
+            // Get the actual port (important when port 0 is passed for random port)
+            const actualPort = server.address().port;
+            logger.info({ port: actualPort }, 'API server started');
             logger.info({ 
-                docs: `http://localhost:${port}/api`,
-                products: `http://localhost:${port}/api/products`,
-                tracked: `http://localhost:${port}/api/tracked`,
+                docs: `http://localhost:${actualPort}/api`,
+                products: `http://localhost:${actualPort}/api/products`,
+                tracked: `http://localhost:${actualPort}/api/tracked`,
             }, 'API endpoints available');
-            resolve(port);
+            resolve(actualPort);
         });
     });
 }

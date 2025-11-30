@@ -7,6 +7,8 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+const isTestEnv = process.env.NODE_ENV === 'test';
+
 const config = {
   // Application
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -16,13 +18,13 @@ const config = {
   healthPort: parseInt(process.env.HEALTH_PORT, 10) || 3000,
   apiPort: parseInt(process.env.API_PORT, 10) || 3001,
   
-  // PostgreSQL
+  // PostgreSQL - use test database when NODE_ENV=test
   pg: {
-    host: process.env.PG_HOST || 'localhost',
-    port: parseInt(process.env.PG_PORT, 10) || 5432,
-    user: process.env.PG_USER,
-    password: process.env.PG_PASSWORD,
-    database: process.env.PG_DATABASE,
+    host: isTestEnv ? (process.env.TEST_PG_HOST || 'localhost') : (process.env.PG_HOST || 'localhost'),
+    port: parseInt(isTestEnv ? (process.env.TEST_PG_PORT || '5432') : (process.env.PG_PORT || '5432'), 10),
+    user: isTestEnv ? process.env.TEST_PG_USER : process.env.PG_USER,
+    password: isTestEnv ? process.env.TEST_PG_PASSWORD : process.env.PG_PASSWORD,
+    database: isTestEnv ? process.env.TEST_PG_DATABASE : process.env.PG_DATABASE,
     max: parseInt(process.env.PG_POOL_MAX, 10) || 20,
     idleTimeoutMillis: parseInt(process.env.PG_IDLE_TIMEOUT, 10) || 30000,
     connectionTimeoutMillis: parseInt(process.env.PG_CONNECTION_TIMEOUT, 10) || 10000,

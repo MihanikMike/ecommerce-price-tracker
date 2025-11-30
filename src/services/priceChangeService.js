@@ -231,7 +231,7 @@ export async function getRecentPriceChanges(hours = 24) {
         WHERE pp.old_price IS NOT NULL
           AND ABS(pp.new_price - pp.old_price) >= $1
           AND ABS((pp.new_price - pp.old_price) / pp.old_price * 100) >= $2
-        ORDER BY ABS(percent_change) DESC
+        ORDER BY ABS((pp.new_price - pp.old_price) / pp.old_price * 100) DESC
     `, [thresholds.minAbsoluteChange, thresholds.minPercentChange]);
 
     return result.rows;
@@ -328,7 +328,7 @@ export async function getBiggestPriceDrops(hours = 24, limit = 10) {
         JOIN previous_prices pp ON pp.product_id = lp.product_id
         JOIN products p ON p.id = lp.product_id
         WHERE lp.new_price < pp.old_price
-        ORDER BY percent_change ASC
+        ORDER BY ((lp.new_price - pp.old_price) / pp.old_price * 100) ASC
         LIMIT $1
     `, [limit]);
 

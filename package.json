@@ -5,6 +5,12 @@
   "description": "A Node.js application that monitors and tracks prices of products from e-commerce sites like Amazon and Burton, storing price history in PostgreSQL",
   "main": "src/index.js",
   "scripts": {
+    "test": "NODE_ENV=test NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test:watch": "NODE_ENV=test NODE_OPTIONS='--experimental-vm-modules' jest --watch",
+    "test:coverage": "NODE_ENV=test NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
+    "test:unit": "NODE_ENV=test NODE_OPTIONS='--experimental-vm-modules' jest tests/unit",
+    "test:integration": "NODE_ENV=test NODE_OPTIONS='--experimental-vm-modules' jest tests/integration",
+    "test:e2e": "NODE_ENV=test NODE_OPTIONS='--experimental-vm-modules' jest tests/e2e",
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "api": "node src/cli/api.js",
@@ -34,9 +40,6 @@
     "backup:create": "node src/cli/backup.js create",
     "backup:list": "node src/cli/backup.js list",
     "backup:help": "node src/cli/backup.js help",
-    "test": "NODE_ENV=test jest",
-    "test:watch": "NODE_ENV=test jest --watch",
-    "test:coverage": "NODE_ENV=test jest --coverage",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "format": "prettier --write \"src/**/*.js\""
@@ -64,10 +67,15 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.1.0",
+    "@jest/globals": "^29.7.0",
     "@types/node": "^22.10.1",
     "eslint": "^9.15.0",
     "jest": "^29.7.0",
-    "prettier": "^3.3.3"
+    "jest-mock-extended": "^4.0.0",
+    "nock": "^14.0.10",
+    "prettier": "^3.3.3",
+    "supertest": "^7.1.4"
   },
   "engines": {
     "node": ">=18.0.0",
