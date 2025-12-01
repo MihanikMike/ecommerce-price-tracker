@@ -1,10 +1,11 @@
 /**
  * Search Engine Scraper
  * 
- * Searches Bing for product URLs with anti-detection measures.
- * Bing is preferred because:
- * - Less aggressive bot detection than Google
- * - More reliable than DuckDuckGo (which now has CAPTCHA)
+ * Searches DuckDuckGo HTML for product URLs with anti-detection measures.
+ * DuckDuckGo HTML version is preferred because:
+ * - No bot detection (simple HTML page)
+ * - No JavaScript required
+ * - Fast and reliable
  * - Good e-commerce results
  */
 
@@ -25,12 +26,23 @@ const ECOMMERCE_DOMAINS = [
     { domain: 'target.com', priority: 9, name: 'Target' },
     { domain: 'bestbuy.com', priority: 9, name: 'Best Buy' },
     
-    // Specialty retailers
+    // Specialty outdoor/snow retailers
     { domain: 'burton.com', priority: 10, name: 'Burton' },
     { domain: 'rei.com', priority: 8, name: 'REI' },
     { domain: 'backcountry.com', priority: 8, name: 'Backcountry' },
     { domain: 'moosejaw.com', priority: 7, name: 'Moosejaw' },
-    { domain: 'evo.com', priority: 7, name: 'Evo' },
+    { domain: 'evo.com', priority: 8, name: 'Evo' },
+    { domain: 'sunandski.com', priority: 7, name: 'Sun & Ski' },
+    { domain: 'scheels.com', priority: 7, name: 'Scheels' },
+    { domain: 'bluezonesports.com', priority: 6, name: 'Blue Zone Sports' },
+    { domain: 'rudeboys.com', priority: 6, name: 'Rude Boys' },
+    { domain: 'skibindingsnow.com', priority: 6, name: 'Ski Binding Snow' },
+    { domain: 'blauerboardshop.com', priority: 6, name: 'Blauer Board Shop' },
+    { domain: 'theskibum.com', priority: 6, name: 'The Ski Bum' },
+    { domain: 'powder7.com', priority: 6, name: 'Powder7' },
+    { domain: 'christysports.com', priority: 6, name: 'Christy Sports' },
+    { domain: 'buckmansskishop.com', priority: 6, name: "Buckman's" },
+    { domain: 'sportchek.ca', priority: 6, name: 'Sport Chek' },
     
     // Fashion
     { domain: 'nordstrom.com', priority: 8, name: 'Nordstrom' },
@@ -63,6 +75,7 @@ const EXCLUDED_DOMAINS = [
     'tiktok.com',
     'bing.com',
     'microsoft.com',
+    'duckduckgo.com',  // DDG ad redirects
 ];
 
 /**
@@ -85,16 +98,19 @@ function randomDelay(min = SEARCH_CONFIG.minDelay, max = SEARCH_CONFIG.maxDelay)
 }
 
 /**
- * Build Bing search URL
+ * Build DuckDuckGo search URL (HTML version - no JavaScript required)
  */
-function buildBingSearchUrl(query, options = {}) {
-    // Use simple URL - Bing adds other params automatically
+function buildDuckDuckGoUrl(query, options = {}) {
     const params = new URLSearchParams({
         q: query,
     });
     
-    return `https://www.bing.com/search?${params.toString()}`;
+    // Use HTML version for less bot detection
+    return `https://html.duckduckgo.com/html/?${params.toString()}`;
 }
+
+// Keep for backward compatibility
+const buildBingSearchUrl = buildDuckDuckGoUrl;
 
 /**
  * Generate random conversation ID for Bing
@@ -141,54 +157,41 @@ function isExcludedDomain(url) {
 }
 
 /**
- * Parse Bing search results from HTML
+ * Parse DuckDuckGo HTML search results
  */
-async function parseBingResults(page) {
+async function parseDuckDuckGoResults(page) {
     const results = [];
     
     try {
-        // Bing uses different selectors - try multiple
-        const selectors = [
-            'li.b_algo',           // Standard organic results
-            '.b_algo',             // Alternative
-            '#b_results .b_algo',  // With parent context
-        ];
+        // DuckDuckGo HTML version uses .result class for each result
+        const resultElements = await page.$$('.result');
         
-        let resultElements = [];
-        for (const selector of selectors) {
-            resultElements = await page.$$(selector);
-            if (resultElements.length > 0) {
-                logger.debug({ selector, count: resultElements.length }, 'Found Bing results');
-                break;
-            }
-        }
+        logger.debug({ count: resultElements.length }, 'Found DuckDuckGo results');
         
         for (const element of resultElements) {
             try {
-                // Get the link - Bing puts it in h2 > a
-                const linkElement = await element.$('h2 a');
+                // Get the title link
+                const linkElement = await element.$('.result__a');
                 if (!linkElement) continue;
                 
                 let href = await linkElement.getAttribute('href');
                 const title = await linkElement.innerText();
                 
-                // Bing wraps URLs in a redirect - extract the real URL
-                if (href && href.includes('bing.com/ck/a')) {
+                // DuckDuckGo wraps URLs in a redirect - extract the real URL from uddg param
+                if (href && href.includes('uddg=')) {
                     try {
-                        const url = new URL(href);
-                        const encodedUrl = url.searchParams.get('u');
+                        const url = new URL(href, 'https://duckduckgo.com');
+                        const encodedUrl = url.searchParams.get('uddg');
                         if (encodedUrl) {
-                            // Bing uses a1 prefix before base64 encoded URL
-                            const base64Part = encodedUrl.replace(/^a1/, '');
-                            href = Buffer.from(base64Part, 'base64').toString('utf-8');
+                            href = decodeURIComponent(encodedUrl);
                         }
                     } catch (e) {
-                        logger.debug({ href, error: e.message }, 'Failed to decode Bing redirect URL');
+                        logger.debug({ href, error: e.message }, 'Failed to decode DuckDuckGo redirect URL');
                     }
                 }
                 
                 // Get snippet/description
-                const snippetElement = await element.$('.b_caption p, .b_algoSlug');
+                const snippetElement = await element.$('.result__snippet');
                 const snippet = snippetElement ? await snippetElement.innerText() : '';
                 
                 // Skip if no valid URL or excluded domain
@@ -209,15 +212,18 @@ async function parseBingResults(page) {
                     priority: ecommerceInfo?.priority || 0,
                 });
             } catch (err) {
-                logger.debug({ error: err.message }, 'Failed to parse single Bing result');
+                logger.debug({ error: err.message }, 'Failed to parse single DuckDuckGo result');
             }
         }
     } catch (err) {
-        logger.error({ error: err }, 'Failed to parse Bing search results');
+        logger.error({ error: err }, 'Failed to parse DuckDuckGo search results');
     }
     
     return results;
 }
+
+// Keep for backward compatibility
+const parseBingResults = parseDuckDuckGoResults;
 
 /**
  * Firefox user agents (less detected by Bing)
@@ -311,21 +317,22 @@ async function createStealthContext(browser) {
 }
 
 /**
- * Perform a search on Bing with anti-detection
+ * Perform a search on DuckDuckGo with anti-detection
+ * Uses the HTML version which requires no JavaScript and has less bot detection
  * 
  * @param {string} query - Search query
  * @param {Object} options - Search options
  * @returns {Promise<Array>} Array of search results
  */
-export async function searchBing(query, options = {}) {
+export async function searchDuckDuckGo(query, options = {}) {
     const {
         maxResults = SEARCH_CONFIG.maxResults,
         ecommerceOnly = true,
         prioritizeEcommerce = true,
     } = options;
     
-    const searchUrl = buildBingSearchUrl(query);
-    logger.info({ query, searchUrl }, 'Performing Bing search');
+    const searchUrl = buildDuckDuckGoUrl(query);
+    logger.info({ query, searchUrl }, 'Performing DuckDuckGo search');
     
     // Apply rate limiting for searches
     await rateLimiter.waitForRateLimit(searchUrl);
@@ -345,28 +352,29 @@ export async function searchBing(query, options = {}) {
         
         const page = await context.newPage();
         
-        // Navigate directly to search (simpler approach works better with Firefox)
+        // Navigate directly to search (DuckDuckGo HTML version)
         await page.goto(searchUrl, { 
             waitUntil: 'load', 
             timeout: SEARCH_CONFIG.timeout 
         });
         
-        // Wait for results to load
+        // Wait for results to load - DuckDuckGo uses .result class
         try {
-            await page.waitForSelector('li.b_algo', { timeout: 15000 });
+            await page.waitForSelector('.result', { timeout: 15000 });
             logger.debug({ query }, 'Results selector found');
         } catch (e) {
-            logger.warn({ query }, 'No results selector found on Bing');
+            logger.warn({ query }, 'No results selector found on DuckDuckGo');
         }
         
         // Random delay after results load
         await randomDelay(1500, 3000);
         
-        // Check for CAPTCHA
-        const captchaExists = await page.$('#captcha, .b_captcha, #b_captcha');
-        if (captchaExists) {
-            logger.warn({ query }, 'CAPTCHA detected on Bing');
-            throw new Error('CAPTCHA detected');
+        // DuckDuckGo HTML version doesn't typically use CAPTCHA
+        // But check for any error messages
+        const errorExists = await page.$('.error, .no-results');
+        if (errorExists) {
+            const errorText = await errorExists.innerText();
+            logger.warn({ query, error: errorText }, 'Error on DuckDuckGo');
         }
         
         // Random scroll to appear human
@@ -377,9 +385,9 @@ export async function searchBing(query, options = {}) {
         await randomDelay(500, 1500);
         
         // Parse results
-        let results = await parseBingResults(page);
+        let results = await parseDuckDuckGoResults(page);
         
-        logger.info({ query, totalResults: results.length }, 'Parsed Bing search results');
+        logger.info({ query, totalResults: results.length }, 'Parsed DuckDuckGo search results');
         
         // Filter to e-commerce only if requested
         if (ecommerceOnly) {
@@ -398,12 +406,12 @@ export async function searchBing(query, options = {}) {
             query, 
             filteredResults: results.length,
             sites: results.map(r => r.siteName)
-        }, 'Bing search completed');
+        }, 'DuckDuckGo search completed');
         
         return results;
         
     } catch (err) {
-        logger.error({ error: err.message, query }, 'Bing search failed');
+        logger.error({ error: err.message, query }, 'DuckDuckGo search failed');
         throw err;
     } finally {
         if (context) {
@@ -443,7 +451,7 @@ export async function searchProduct(productName, options = {}) {
                 await randomDelay(backoffDelay, backoffDelay + 2000);
             }
             
-            const results = await searchBing(query, {
+            const results = await searchDuckDuckGo(query, {
                 maxResults,
                 ecommerceOnly: true,
                 prioritizeEcommerce: true,
@@ -460,7 +468,7 @@ export async function searchProduct(productName, options = {}) {
                 await randomDelay(2000, 4000);
                 
                 // Fallback to just product name
-                const simpleResults = await searchBing(productName, {
+                const simpleResults = await searchDuckDuckGo(productName, {
                     maxResults,
                     ecommerceOnly: false,
                     prioritizeEcommerce: true,
@@ -477,6 +485,7 @@ export async function searchProduct(productName, options = {}) {
         }
     }
     
+    
     throw lastError || new Error(`No search results found for: ${productName}`);
 }
 
@@ -484,14 +493,14 @@ export async function searchProduct(productName, options = {}) {
  * Search for a product across multiple search engines (fallback strategy)
  */
 export async function searchProductWithFallback(productName, options = {}) {
-    // Primary: Bing
+    // Primary: DuckDuckGo
     try {
         const results = await searchProduct(productName, options);
         if (results.length > 0) {
-            return { engine: 'bing', results };
+            return { engine: 'duckduckgo', results };
         }
     } catch (err) {
-        logger.warn({ error: err.message }, 'Bing search failed');
+        logger.warn({ error: err.message }, 'DuckDuckGo search failed');
     }
     
     // Future: Add other search engine fallbacks here
@@ -514,12 +523,12 @@ export function addEcommerceDomain(domain, name, priority = 5) {
     }
 }
 
-// Keep backward compatibility - export DuckDuckGo as alias
-export const searchDuckDuckGo = searchBing;
+// Keep backward compatibility - export searchBing as alias for searchDuckDuckGo
+export const searchBing = searchDuckDuckGo;
 
 export default {
-    searchBing,
-    searchDuckDuckGo: searchBing,  // Alias for backward compatibility
+    searchDuckDuckGo,
+    searchBing: searchDuckDuckGo,  // Alias for backward compatibility
     searchProduct,
     searchProductWithFallback,
     getKnownEcommerceDomains,

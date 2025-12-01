@@ -24,12 +24,12 @@ export const mockBrowser = {
   isConnected: jest.fn().mockReturnValue(true),
 };
 
-export const chromium = {
+export const firefox = {
   launch: jest.fn().mockResolvedValue(mockBrowser),
 };
 
 export default {
-  chromium,
+  firefox,
   mockBrowser,
   mockContext,
   mockPage,

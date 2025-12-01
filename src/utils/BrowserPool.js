@@ -1,4 +1,4 @@
-import { chromium, firefox } from 'playwright';
+import { firefox } from 'playwright';
 import logger from './logger.js';
 import config from '../config/index.js';
 
@@ -27,27 +27,12 @@ class BrowserPool {
         logger.info({ size: this.size, browserType: this.browserType }, 'Initializing browser pool');
         
         try {
-            const launcher = this.browserType === 'firefox' ? firefox : chromium;
-            const launchOptions = this.browserType === 'firefox' 
-                ? {
-                    headless: config.scraper?.headless !== false,
-                  }
-                : {
-                    headless: config.scraper?.headless !== false,
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-gpu',
-                        '--disable-blink-features=AutomationControlled',
-                        '--disable-infobars',
-                        '--window-size=1920,1080',
-                        '--start-maximized'
-                    ]
-                  };
+            const launchOptions = {
+                headless: config.scraper?.headless !== false,
+            };
             
             for (let i = 0; i < this.size; i++) {
-                const browser = await launcher.launch(launchOptions);
+                const browser = await firefox.launch(launchOptions);
                 this.browsers.push(browser);
                 this.available.push(browser);
                 logger.debug({ browserId: i + 1 }, 'Browser launched');
@@ -85,9 +70,8 @@ class BrowserPool {
                 // Browser disconnected, create a replacement
                 logger.warn('Found disconnected browser, creating replacement');
                 try {
-                    const newBrowser = await chromium.launch({
+                    const newBrowser = await firefox.launch({
                         headless: true,
-                        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
                     });
                     this.stats.totalAcquired++;
                     this.stats.currentInUse++;
@@ -138,9 +122,8 @@ class BrowserPool {
         if (!browser.isConnected()) {
             logger.warn('Released browser is disconnected, not returning to pool');
             // Async create replacement but don't await
-            chromium.launch({
+            firefox.launch({
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
             }).then(newBrowser => {
                 this.available.push(newBrowser);
                 logger.info('Replacement browser added to pool');

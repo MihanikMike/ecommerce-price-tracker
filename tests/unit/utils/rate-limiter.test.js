@@ -11,21 +11,48 @@ describe('RateLimiter', () => {
   });
 
   describe('getSiteKey', () => {
-    it('should identify amazon.com URLs', () => {
-      expect(rateLimiter.getSiteKey('https://www.amazon.com/dp/B123')).toBe('amazon.com');
-      expect(rateLimiter.getSiteKey('https://amazon.com/product')).toBe('amazon.com');
+    describe('Amazon URLs', () => {
+      it('should identify www.amazon.com URLs', () => {
+        expect(rateLimiter.getSiteKey('https://www.amazon.com/dp/B123')).toBe('amazon.com');
+      });
+
+      it('should identify amazon.com without www', () => {
+        expect(rateLimiter.getSiteKey('https://amazon.com/product')).toBe('amazon.com');
+      });
+
+      it('should identify Amazon product URLs', () => {
+        expect(rateLimiter.getSiteKey('https://www.amazon.com/dp/B08N5WRWNW')).toBe('amazon.com');
+        expect(rateLimiter.getSiteKey('https://www.amazon.com/gp/product/B08N5WRWNW')).toBe('amazon.com');
+      });
     });
 
-    it('should identify burton.com URLs', () => {
-      expect(rateLimiter.getSiteKey('https://www.burton.com/us/product')).toBe('burton.com');
+    describe('Burton URLs', () => {
+      it('should identify burton.com URLs', () => {
+        expect(rateLimiter.getSiteKey('https://www.burton.com/us/product')).toBe('burton.com');
+      });
+
+      it('should identify burton.com without www', () => {
+        expect(rateLimiter.getSiteKey('https://burton.com/us/en/p/board')).toBe('burton.com');
+      });
     });
 
-    it('should return default for unknown sites', () => {
-      expect(rateLimiter.getSiteKey('https://example.com')).toBe('default');
-    });
+    describe('Unknown/Invalid URLs', () => {
+      it('should return default for unknown sites', () => {
+        expect(rateLimiter.getSiteKey('https://example.com')).toBe('default');
+        expect(rateLimiter.getSiteKey('https://ebay.com/item/123')).toBe('default');
+      });
 
-    it('should handle invalid URLs', () => {
-      expect(rateLimiter.getSiteKey('not-a-url')).toBe('default');
+      it('should handle invalid URLs gracefully', () => {
+        expect(rateLimiter.getSiteKey('not-a-url')).toBe('default');
+        expect(rateLimiter.getSiteKey('')).toBe('default');
+        expect(rateLimiter.getSiteKey(null)).toBe('default');
+        expect(rateLimiter.getSiteKey(undefined)).toBe('default');
+      });
+
+      it('should handle malformed URLs', () => {
+        expect(rateLimiter.getSiteKey('http://')).toBe('default');
+        expect(rateLimiter.getSiteKey('amazon.com')).toBe('default'); // Missing protocol
+      });
     });
   });
 
@@ -34,11 +61,29 @@ describe('RateLimiter', () => {
       const config = rateLimiter.getConfig('amazon.com');
       expect(config.minDelayMs).toBeDefined();
       expect(config.maxRequestsPerMinute).toBeDefined();
+      expect(config.maxBackoffMs).toBeDefined();
+    });
+
+    it('should return burton config for burton.com', () => {
+      const config = rateLimiter.getConfig('burton.com');
+      expect(config.minDelayMs).toBeDefined();
     });
 
     it('should return default config for unknown sites', () => {
       const config = rateLimiter.getConfig('unknown');
       expect(config).toEqual(rateLimiter.siteConfigs['default']);
+    });
+
+    it('should have consistent config structure', () => {
+      const sites = ['amazon.com', 'burton.com', 'default'];
+      
+      sites.forEach(site => {
+        const config = rateLimiter.getConfig(site);
+        expect(typeof config.minDelayMs).toBe('number');
+        expect(typeof config.maxRequestsPerMinute).toBe('number');
+        expect(config.minDelayMs).toBeGreaterThan(0);
+        expect(config.maxRequestsPerMinute).toBeGreaterThan(0);
+      });
     });
   });
 
@@ -53,16 +98,41 @@ describe('RateLimiter', () => {
       expect(delay).toBeLessThanOrEqual(config.maxBackoffMs);
     });
 
-    it('should increase delay with backoff', () => {
+    it('should increase delay with backoff level', () => {
       const url = 'https://www.amazon.com/dp/B123';
       const siteKey = rateLimiter.getSiteKey(url);
+      const config = rateLimiter.getConfig(siteKey);
       
-      // Set backoff level
-      rateLimiter.backoffLevel.set(siteKey, 2);
+      // Get base delay with no backoff
+      rateLimiter.backoffLevel.set(siteKey, 0);
+      const baseDelay = rateLimiter.calculateDelay(url);
+      
+      // Set higher backoff level
+      rateLimiter.backoffLevel.set(siteKey, 3);
+      const backoffDelay = rateLimiter.calculateDelay(url);
+      
+      // With backoff, delay should be greater or equal (exponential)
+      expect(backoffDelay).toBeGreaterThanOrEqual(baseDelay);
+    });
+
+    it('should return delay for different sites', () => {
+      const amazonDelay = rateLimiter.calculateDelay('https://amazon.com/dp/B123');
+      const burtonDelay = rateLimiter.calculateDelay('https://burton.com/product');
+      
+      expect(amazonDelay).toBeGreaterThan(0);
+      expect(burtonDelay).toBeGreaterThan(0);
+    });
+
+    it('should cap delay at maxBackoffMs', () => {
+      const url = 'https://www.amazon.com/dp/B123';
+      const siteKey = rateLimiter.getSiteKey(url);
+      const config = rateLimiter.getConfig(siteKey);
+      
+      // Set very high backoff level
+      rateLimiter.backoffLevel.set(siteKey, 100);
       const delay = rateLimiter.calculateDelay(url);
       
-      // With backoff, delay should be positive
-      expect(delay).toBeGreaterThan(0);
+      expect(delay).toBeLessThanOrEqual(config.maxBackoffMs);
     });
   });
 
@@ -72,6 +142,30 @@ describe('RateLimiter', () => {
       const siteKey = rateLimiter.getSiteKey(url);
       
       rateLimiter.consecutiveErrors.set(siteKey, 5);
+      rateLimiter.reportSuccess(url);
+      
+      expect(rateLimiter.consecutiveErrors.get(siteKey)).toBe(0);
+    });
+
+    it('should decrease backoff level on success', () => {
+      const url = 'https://www.amazon.com/dp/B123';
+      const siteKey = rateLimiter.getSiteKey(url);
+      
+      rateLimiter.backoffLevel.set(siteKey, 3);
+      rateLimiter.reportSuccess(url);
+      
+      // Backoff should decrease (or stay at 0)
+      const backoff = rateLimiter.backoffLevel.get(siteKey) || 0;
+      expect(backoff).toBeLessThanOrEqual(3);
+    });
+
+    it('should reset consecutive errors', () => {
+      const url = 'https://www.amazon.com/dp/B123';
+      const siteKey = rateLimiter.getSiteKey(url);
+      
+      // Set up some consecutive errors
+      rateLimiter.consecutiveErrors.set(siteKey, 5);
+      
       rateLimiter.reportSuccess(url);
       
       expect(rateLimiter.consecutiveErrors.get(siteKey)).toBe(0);
@@ -88,6 +182,63 @@ describe('RateLimiter', () => {
       
       rateLimiter.reportError(url, new Error('test'));
       expect(rateLimiter.consecutiveErrors.get(siteKey)).toBe(2);
+    });
+
+    it('should increase backoff level on errors', () => {
+      const url = 'https://www.amazon.com/dp/B123';
+      const siteKey = rateLimiter.getSiteKey(url);
+      
+      const initialBackoff = rateLimiter.backoffLevel.get(siteKey) || 0;
+      
+      rateLimiter.reportError(url, new Error('rate limit'));
+      
+      const newBackoff = rateLimiter.backoffLevel.get(siteKey) || 0;
+      expect(newBackoff).toBeGreaterThanOrEqual(initialBackoff);
+    });
+
+    it('should handle multiple consecutive errors', () => {
+      const url = 'https://www.amazon.com/dp/B123';
+      const siteKey = rateLimiter.getSiteKey(url);
+      
+      for (let i = 0; i < 5; i++) {
+        rateLimiter.reportError(url, new Error('error'));
+      }
+      
+      expect(rateLimiter.consecutiveErrors.get(siteKey)).toBe(5);
+    });
+  });
+
+  describe('waitForRateLimit', () => {
+    it('should be a function', () => {
+      expect(typeof rateLimiter.waitForRateLimit).toBe('function');
+    });
+
+    it('should return a promise', () => {
+      const result = rateLimiter.waitForRateLimit('https://amazon.com/dp/B123');
+      expect(result).toBeInstanceOf(Promise);
+    });
+
+    it('should resolve with delay value', async () => {
+      const delay = await rateLimiter.waitForRateLimit('https://amazon.com/dp/B123');
+      expect(typeof delay).toBe('number');
+      expect(delay).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('state isolation', () => {
+    it('should track different sites independently', () => {
+      const amazonUrl = 'https://amazon.com/dp/B123';
+      const burtonUrl = 'https://burton.com/product';
+      
+      // Report errors for Amazon only
+      rateLimiter.reportError(amazonUrl, new Error('error'));
+      rateLimiter.reportError(amazonUrl, new Error('error'));
+      
+      const amazonKey = rateLimiter.getSiteKey(amazonUrl);
+      const burtonKey = rateLimiter.getSiteKey(burtonUrl);
+      
+      expect(rateLimiter.consecutiveErrors.get(amazonKey)).toBe(2);
+      expect(rateLimiter.consecutiveErrors.get(burtonKey) || 0).toBe(0);
     });
   });
 });

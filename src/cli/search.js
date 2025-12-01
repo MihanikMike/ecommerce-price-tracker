@@ -307,7 +307,7 @@ function cmdHelp() {
     
     print('\nOptions:', 'cyan');
     print('  --sites=a,b       Sites to search (default: target)');
-    print('                    Available: target, newegg, bhphoto, rei');
+    print('                    Available: target, walmart, bestbuy, newegg, bhphoto, rei');
     print('  --max=N           Max results per site (default: 5)');
     print('  --interval=N      Check interval in minutes (default: 60)');
     print('  --limit=N         Limit products to process (default: 50)');
