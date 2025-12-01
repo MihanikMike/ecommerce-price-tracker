@@ -3,10 +3,12 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 
+// Import actual functions from source
+import { exportToJSON, exportToCSV } from '../../../src/services/exportService.js';
+
 /**
  * Tests for Export Service
  * Tests file export functionality with real file system operations
- * Note: Uses simplified approach without ES module mocking
  */
 describe('Export Service', () => {
   const testDir = path.join(os.tmpdir(), 'price-tracker-test-exports');
@@ -200,6 +202,75 @@ describe('Export Service', () => {
       expect(stats.min).toBe(100);
       expect(stats.max).toBe(200);
       expect(stats.avg).toBe(150);
+    });
+  });
+
+  describe('exportToJSON (actual function)', () => {
+    it('should export data to JSON file using actual function', async () => {
+      const testData = [
+        { id: 1, name: 'Product 1', price: 29.99 },
+        { id: 2, name: 'Product 2', price: 49.99 }
+      ];
+      const filename = 'actual-export-test.json';
+      
+      // Call the actual function
+      await exportToJSON(testData, filename);
+      
+      // Verify file was created in the exports directory
+      const content = await fs.readFile(`./exports/${filename}`, 'utf8');
+      const parsed = JSON.parse(content);
+      expect(parsed).toEqual(testData);
+      
+      // Clean up
+      await fs.unlink(`./exports/${filename}`);
+    });
+
+    it('should export empty array', async () => {
+      const filename = 'empty-export-test.json';
+      
+      await exportToJSON([], filename);
+      
+      const content = await fs.readFile(`./exports/${filename}`, 'utf8');
+      const parsed = JSON.parse(content);
+      expect(parsed).toEqual([]);
+      
+      // Clean up
+      await fs.unlink(`./exports/${filename}`);
+    });
+
+    it('should export complex nested data', async () => {
+      const testData = [
+        {
+          id: 1,
+          name: 'Product 1',
+          priceHistory: [
+            { date: '2024-01-01', price: 100 },
+            { date: '2024-01-15', price: 90 }
+          ],
+          metadata: {
+            category: 'Electronics',
+            tags: ['sale', 'popular']
+          }
+        }
+      ];
+      const filename = 'nested-export-test.json';
+      
+      await exportToJSON(testData, filename);
+      
+      const content = await fs.readFile(`./exports/${filename}`, 'utf8');
+      const parsed = JSON.parse(content);
+      expect(parsed[0].priceHistory).toHaveLength(2);
+      expect(parsed[0].metadata.category).toBe('Electronics');
+      
+      // Clean up
+      await fs.unlink(`./exports/${filename}`);
+    });
+  });
+
+  describe('exportToCSV (actual function)', () => {
+    it('should throw not implemented error', async () => {
+      await expect(exportToCSV([{ id: 1 }], 'test.csv'))
+        .rejects.toThrow('CSV export not implemented yet');
     });
   });
 });

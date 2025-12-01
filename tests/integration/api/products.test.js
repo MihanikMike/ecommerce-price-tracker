@@ -100,5 +100,182 @@ describe('Products API', () => {
       expect(data.tracked.product_name).toBe('AirPods Pro 3');
       expect(data.tracked.tracking_mode).toBe('search');
     });
+
+    it('should return 400 for missing url and productName', async () => {
+      const response = await fetch(`${baseUrl}/api/tracked`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          site: 'Amazon'
+        })
+      });
+      
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('GET /api/tracked', () => {
+    it('should return all tracked products', async () => {
+      // Create a tracked product first
+      await fetch(`${baseUrl}/api/tracked`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: 'https://amazon.com/dp/TRACKED1',
+          site: 'Amazon'
+        })
+      });
+
+      const response = await fetch(`${baseUrl}/api/tracked`);
+      const data = await response.json();
+      
+      expect(response.status).toBe(200);
+      expect(Array.isArray(data.tracked)).toBe(true);
+      expect(data.tracked.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('DELETE /api/tracked/:id', () => {
+    it('should delete a tracked product', async () => {
+      // Create a tracked product first
+      const createResponse = await fetch(`${baseUrl}/api/tracked`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: 'https://amazon.com/dp/TODELETE',
+          site: 'Amazon'
+        })
+      });
+      const createData = await createResponse.json();
+      const trackedId = createData.tracked.id;
+
+      const deleteResponse = await fetch(`${baseUrl}/api/tracked/${trackedId}`, {
+        method: 'DELETE',
+      });
+      
+      expect(deleteResponse.status).toBe(200);
+    });
+
+    it('should return 404 for non-existent tracked product', async () => {
+      const response = await fetch(`${baseUrl}/api/tracked/99999`, {
+        method: 'DELETE',
+      });
+      
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('PATCH /api/tracked/:id', () => {
+    it('should enable a tracked product', async () => {
+      // Create a tracked product first
+      const createResponse = await fetch(`${baseUrl}/api/tracked`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: 'https://amazon.com/dp/TOENABLE',
+          site: 'Amazon'
+        })
+      });
+      const createData = await createResponse.json();
+      const trackedId = createData.tracked.id;
+
+      const patchResponse = await fetch(`${baseUrl}/api/tracked/${trackedId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true })
+      });
+      
+      expect(patchResponse.status).toBe(200);
+    });
+
+    it('should return 404 for non-existent product', async () => {
+      const response = await fetch(`${baseUrl}/api/tracked/99999`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false })
+      });
+      
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/stats', () => {
+    it('should return database statistics', async () => {
+      const response = await fetch(`${baseUrl}/api/stats`);
+      const data = await response.json();
+      
+      expect(response.status).toBe(200);
+      expect(data).toHaveProperty('database');
+      expect(data).toHaveProperty('tracking');
+      expect(data).toHaveProperty('timestamp');
+    });
+  });
+
+  describe('GET /api/stats/config', () => {
+    it('should return configuration', async () => {
+      const response = await fetch(`${baseUrl}/api/stats/config`);
+      const data = await response.json();
+      
+      expect(response.status).toBe(200);
+      expect(data).toHaveProperty('version');
+      expect(data).toHaveProperty('retention');
+      expect(data).toHaveProperty('priceChange');
+    });
+  });
+
+  describe('GET /api/price-changes', () => {
+    it('should return price changes data', async () => {
+      const response = await fetch(`${baseUrl}/api/price-changes`);
+      const data = await response.json();
+      
+      expect(response.status).toBe(200);
+      expect(data).toHaveProperty('priceChanges');
+    });
+  });
+
+  describe('GET /api/price-changes/drops', () => {
+    it('should return price drops data', async () => {
+      const response = await fetch(`${baseUrl}/api/price-changes/drops`);
+      const data = await response.json();
+      
+      expect(response.status).toBe(200);
+      expect(data).toHaveProperty('priceDrops');
+    });
+  });
+
+  describe('GET /api/tracked/:id', () => {
+    it('should return tracked product by id', async () => {
+      // Create a tracked product first
+      const createResponse = await fetch(`${baseUrl}/api/tracked`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: 'https://amazon.com/dp/GETBYID',
+          site: 'Amazon'
+        })
+      });
+      const createData = await createResponse.json();
+      const trackedId = createData.tracked.id;
+
+      const response = await fetch(`${baseUrl}/api/tracked/${trackedId}`);
+      const data = await response.json();
+      
+      expect(response.status).toBe(200);
+      expect(data.tracked.id).toBe(trackedId);
+    });
+
+    it('should return 404 for non-existent tracked id', async () => {
+      const response = await fetch(`${baseUrl}/api/tracked/99999`);
+      
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/products/:id/history', () => {
+    it('should return 404 for non-existent product history', async () => {
+      const response = await fetch(`${baseUrl}/api/products/99999/history`);
+      
+      expect(response.status).toBe(404);
+    });
   });
 });

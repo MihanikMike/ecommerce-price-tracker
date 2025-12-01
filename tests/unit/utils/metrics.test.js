@@ -10,7 +10,13 @@ import metrics, {
   recordPriceChange,
   recordDbQuery,
   getMetrics,
-  getMetricsContentType
+  getMetricsContentType,
+  updateProxyMetrics,
+  updateBrowserPoolMetrics,
+  updateDbPoolMetrics,
+  recordRateLimitDelay,
+  recordRateLimitHit,
+  resetMetrics,
 } from '../../../src/utils/metrics.js';
 
 describe('metrics', () => {
@@ -112,6 +118,96 @@ describe('metrics', () => {
     it('should not throw with error flag', () => {
       expect(() => {
         recordDbQuery('insert', 0.1, true);
+      }).not.toThrow();
+    });
+  });
+
+  describe('updateProxyMetrics', () => {
+    it('should be a function', () => {
+      expect(typeof updateProxyMetrics).toBe('function');
+    });
+
+    it('should not throw when updating proxy metrics', () => {
+      expect(() => {
+        updateProxyMetrics(10, 2);
+      }).not.toThrow();
+    });
+
+    it('should not throw with only working count', () => {
+      expect(() => {
+        updateProxyMetrics(5);
+      }).not.toThrow();
+    });
+  });
+
+  describe('updateBrowserPoolMetrics', () => {
+    it('should be a function', () => {
+      expect(typeof updateBrowserPoolMetrics).toBe('function');
+    });
+
+    it('should not throw when updating browser pool metrics', () => {
+      expect(() => {
+        updateBrowserPoolMetrics(5, 2);
+      }).not.toThrow();
+    });
+
+    it('should not throw with zero in-use', () => {
+      expect(() => {
+        updateBrowserPoolMetrics(3, 0);
+      }).not.toThrow();
+    });
+  });
+
+  describe('updateDbPoolMetrics', () => {
+    it('should be a function', () => {
+      expect(typeof updateDbPoolMetrics).toBe('function');
+    });
+
+    it('should not throw when updating db pool metrics', () => {
+      expect(() => {
+        updateDbPoolMetrics(20, 15, 0);
+      }).not.toThrow();
+    });
+
+    it('should not throw with waiting connections', () => {
+      expect(() => {
+        updateDbPoolMetrics(20, 0, 5);
+      }).not.toThrow();
+    });
+  });
+
+  describe('recordRateLimitDelay', () => {
+    it('should be a function', () => {
+      expect(typeof recordRateLimitDelay).toBe('function');
+    });
+
+    it('should not throw when recording rate limit delay', () => {
+      expect(() => {
+        recordRateLimitDelay('amazon.com', 2.5);
+      }).not.toThrow();
+    });
+  });
+
+  describe('recordRateLimitHit', () => {
+    it('should be a function', () => {
+      expect(typeof recordRateLimitHit).toBe('function');
+    });
+
+    it('should not throw when recording rate limit hit', () => {
+      expect(() => {
+        recordRateLimitHit('walmart.com');
+      }).not.toThrow();
+    });
+  });
+
+  describe('resetMetrics', () => {
+    it('should be a function', () => {
+      expect(typeof resetMetrics).toBe('function');
+    });
+
+    it('should not throw when resetting metrics', () => {
+      expect(() => {
+        resetMetrics();
       }).not.toThrow();
     });
   });

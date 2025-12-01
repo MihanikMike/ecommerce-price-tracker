@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">76.92% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/13</span>
+                <span class='fraction'>10/13</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>2/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/1</span>
+                <span class='fraction'>1/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">76.92% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/13</span>
+                <span class='fraction'>10/13</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -95,57 +95,57 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { pool } from "../db/connect-pg.js";
 import logger from "../utils/logger.js";
 &nbsp;
-export async function <span class="fstat-no" title="function not covered" >upsertProductAndHistory(</span>{ url, site, title, price, currency }) {
-  const client = <span class="cstat-no" title="statement not covered" >await pool.connect();</span>
-<span class="cstat-no" title="statement not covered" >  try {</span>
-<span class="cstat-no" title="statement not covered" >    await client.query("BEGIN");</span>
-    const res = <span class="cstat-no" title="statement not covered" >await client.query(</span>
+export async function upsertProductAndHistory({ url, site, title, price, currency }) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const res = await client.query(
       `INSERT INTO products (url,site,title,last_seen_at) VALUES ($1,$2,$3,now())
        ON CONFLICT (url) DO UPDATE SET title = EXCLUDED.title, last_seen_at = now()
        RETURNING id`,
       [url, site, title]
     );
-    const productId = <span class="cstat-no" title="statement not covered" >res.rows[0].id;</span>
-<span class="cstat-no" title="statement not covered" >    await client.query(</span>
+    const productId = res.rows[0].id;
+    await client.query(
       `INSERT INTO price_history(product_id, price, currency, captured_at) VALUES ($1,$2,$3,now())`,
       [productId, price, currency || 'USD']
     );
-<span class="cstat-no" title="statement not covered" >    await client.query("COMMIT");</span>
-<span class="cstat-no" title="statement not covered" >    logger.debug({ productId, url, price }, 'Product and price history saved');</span>
-<span class="cstat-no" title="statement not covered" >    return productId;</span>
+    await client.query("COMMIT");
+    logger.debug({ productId, url, price }, 'Product and price history saved');
+    return productId;
   } catch (e) {
 <span class="cstat-no" title="statement not covered" >    await client.query("ROLLBACK");</span>
 <span class="cstat-no" title="statement not covered" >    logger.error({ error: e, url }, 'Failed to save product');</span>
 <span class="cstat-no" title="statement not covered" >    throw e;</span>
   } finally {
-<span class="cstat-no" title="statement not covered" >    client.release();</span>
+    client.release();
   }
 }</pre></td></tr></table></pre>
 
@@ -154,7 +154,7 @@ export async function <span class="fstat-no" title="function not covered" >upser
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-12-01T00:46:04.749Z
+                at 2025-12-01T17:28:23.262Z
             </div>
         <script src="../prettify.js"></script>
         <script>

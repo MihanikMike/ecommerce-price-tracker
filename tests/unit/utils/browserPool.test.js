@@ -1,11 +1,77 @@
 import { describe, it, expect } from '@jest/globals';
+import { browserPool } from '../../../src/utils/BrowserPool.js';
 
 /**
- * Tests for Browser Pool logic
- * Note: These test utility functions and patterns,
- * not the full pool which requires Playwright mocking
+ * Tests for Browser Pool
+ * Tests the browserPool singleton and its methods
  */
-describe('BrowserPool Logic', () => {
+describe('BrowserPool', () => {
+  describe('browserPool singleton', () => {
+    it('should be defined', () => {
+      expect(browserPool).toBeDefined();
+    });
+
+    it('should have size property', () => {
+      expect(browserPool.size).toBeDefined();
+      expect(typeof browserPool.size).toBe('number');
+      expect(browserPool.size).toBeGreaterThan(0);
+    });
+
+    it('should have browserType property', () => {
+      expect(browserPool.browserType).toBeDefined();
+      expect(typeof browserPool.browserType).toBe('string');
+    });
+  });
+
+  describe('getStats', () => {
+    it('should return stats object', () => {
+      const stats = browserPool.getStats();
+      expect(typeof stats).toBe('object');
+    });
+
+    it('should include totalBrowsers', () => {
+      const stats = browserPool.getStats();
+      expect(stats.totalBrowsers).toBeDefined();
+      expect(typeof stats.totalBrowsers).toBe('number');
+    });
+
+    it('should include available count', () => {
+      const stats = browserPool.getStats();
+      expect(stats.available).toBeDefined();
+      expect(typeof stats.available).toBe('number');
+    });
+
+    it('should include waiting count', () => {
+      const stats = browserPool.getStats();
+      expect(stats.waiting).toBeDefined();
+      expect(typeof stats.waiting).toBe('number');
+    });
+
+    it('should include currentInUse', () => {
+      const stats = browserPool.getStats();
+      expect(stats.currentInUse).toBeDefined();
+      expect(typeof stats.currentInUse).toBe('number');
+    });
+
+    it('should include peakInUse', () => {
+      const stats = browserPool.getStats();
+      expect(stats.peakInUse).toBeDefined();
+      expect(typeof stats.peakInUse).toBe('number');
+    });
+
+    it('should include totalAcquired', () => {
+      const stats = browserPool.getStats();
+      expect(stats.totalAcquired).toBeDefined();
+      expect(typeof stats.totalAcquired).toBe('number');
+    });
+
+    it('should include totalReleased', () => {
+      const stats = browserPool.getStats();
+      expect(stats.totalReleased).toBeDefined();
+      expect(typeof stats.totalReleased).toBe('number');
+    });
+  });
+
   describe('Pool state management', () => {
     it('should track browser availability', () => {
       const pool = {

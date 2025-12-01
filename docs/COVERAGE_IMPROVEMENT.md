@@ -1,8 +1,21 @@
 # 📊 Test Coverage Improvement Guide
 
-**Current Coverage:** 22.5%  
-**Target Coverage:** 40%+  
-**Last Updated:** November 30, 2025
+**Current Coverage:** 40.10% ✅  
+**Target Coverage:** 40%+ ✅ ACHIEVED  
+**Last Updated:** December 1, 2025
+
+---
+
+## 🎉 Coverage Milestone Achieved!
+
+We successfully improved test coverage from **22.5%** to **40.10%** (lines), exceeding our target!
+
+- **Total Tests:** 725 passing (up from ~598)
+- **Test Suites:** 33 passing
+- **Statement Coverage:** 39.97%
+- **Line Coverage:** 40.10%
+- **Branch Coverage:** 39.13%
+- **Function Coverage:** 47.46%
 
 ---
 
@@ -11,201 +24,176 @@
 | Module | Coverage | Lines | Status |
 |--------|----------|-------|--------|
 | `delay.js` | 100% | 100% | ✅ Complete |
+| `db-retry.js` | 100% | 100% | ✅ Complete |
+| `metrics.js` | 100% | 100% | ✅ Complete |
+| `validation.js` | 100% | 100% | ✅ Complete |
+| `priceChangeService.js` | 98% | 98% | ✅ Excellent |
 | `retry.js` | 95% | 94% | ✅ Excellent |
-| `validation.js` | 93% | 94% | ✅ Excellent |
-| `rate-limiter.js` | 73% | 79% | 🟡 Good |
-| `metrics.js` | 77% | 77% | 🟡 Good |
+| `retentionService.js` | 94% | 94% | ✅ Excellent |
+| `product-matcher.js` | 94% | 95% | ✅ Excellent |
+| `rate-limiter.js` | 86% | 93% | ✅ Excellent |
+| `productRepository.js` | 89% | 89% | ✅ Excellent |
+| `site-registry.js` | 88% | 87% | ✅ Excellent |
+| `productService.js` | 77% | 77% | 🟡 Good |
 | `useragents.js` | 76% | 76% | 🟡 Good |
-| `product-matcher.js` | 64% | 67% | 🟡 Good |
+| `exportService.js` | 75% | 75% | 🟡 Good |
+| `trackedProductsRepository.js` | 71% | 71% | 🟡 Good |
+| `priceAlertService.js` | 68% | 68% | 🟡 Good |
 | `logger.js` | 65% | 65% | 🟡 Good |
-| `api-server.js` | 49% | 48% | 🟠 Moderate |
-| `priceChangeService.js` | 45% | 45% | 🟠 Moderate |
-| `trackedProductsRepository.js` | 19% | 19% | 🔴 Low |
-| `connect-pg.js` | 17% | 17% | 🔴 Low |
-| `config/index.js` | 15% | 15% | 🔴 Low |
-| `exportService.js` | 13% | 13% | 🔴 Low |
-| `retentionService.js` | 4% | 4% | 🔴 Low |
-| `productRepository.js` | 0% | 0% | ❌ None |
+| `api-server.js` | 65% | 64% | 🟡 Good |
+| `config/index.js` | 41% | 41% | 🟠 Moderate |
+| `connect-pg.js` | 29% | 30% | 🟠 Moderate |
+| `proxy-manager.js` | 13% | 14% | 🔴 Low |
+| `BrowserPool.js` | 9% | 9% | 🔴 Low |
+| `search-engine.js` | 7% | 7% | 🔴 Low |
+| `fetch-page.js` | 2% | 2% | 🔴 Low |
 | `amazon.js` | 0% | 0% | ❌ None |
 | `burton.js` | 0% | 0% | ❌ None |
 | `price-monitor.js` | 0% | 0% | ❌ None |
 | `search-monitor.js` | 0% | 0% | ❌ None |
-| `BrowserPool.js` | 0% | 0% | ❌ None |
-| `fetch-page.js` | 0% | 0% | ❌ None |
-| `proxy-manager.js` | 0% | 0% | ❌ None |
 | `health-server.js` | 0% | 0% | ❌ None |
 | `scrapeWorker.js` | 0% | 0% | ❌ None |
 
 ---
 
-## 🎯 Quick Wins (Low Effort, High Impact)
+## ✅ Completed Improvements (Session: Dec 1, 2025)
 
-### 1. product-matcher.js (67% → 90%)
-**Effort:** Low  
-**Impact:** +3% overall coverage
+### 1. productRepository.js (0% → 89%)
+**Strategy:** Integration tests with actual database imports
 
-**Untested functions:**
-- `levenshteinDistance(a, b)` - Pure function, easy to test
-- `normalizeText(text)` - Pure function
-- `tokenize(text)` - Pure function  
-- `comparePrices(products)` - Pure function
-
-**Example test:**
 ```javascript
-import { comparePrices } from '../../../src/search/product-matcher.js';
-
-describe('comparePrices', () => {
-  it('should find lowest and highest prices', () => {
-    const products = [
-      { title: 'Product A', price: 99.99 },
-      { title: 'Product B', price: 149.99 },
-      { title: 'Product C', price: 79.99 },
-    ];
-    
-    const result = comparePrices(products);
-    
-    expect(result.lowestPrice.price).toBe(79.99);
-    expect(result.highestPrice.price).toBe(149.99);
-    expect(result.priceRange).toBe(70);
-  });
-});
+import { upsertProductAndHistory, getAllProductsWithLatestPrice, getPriceHistory } 
+  from '../../../src/db/productRepository.js';
 ```
 
----
-
-### 2. priceChangeService.js (45% → 70%)
-**Effort:** Low  
-**Impact:** +2% overall coverage
-
-**Untested functions (lines 105-193):**
-- `getPreviousPrice(productId)` - Needs DB mock
-- `recordPriceChange(productId, oldPrice, newPrice)` - Needs DB mock
-- `getRecentPriceChanges(productId, days)` - Needs DB mock
-
-**Approach:** Create integration tests with test database
+**Tests Added:**
+- Insert new product with price history
+- Update existing product (upsert)
+- Get all products with pagination
+- Get price history with ordering
 
 ---
 
-### 3. config/index.js (15% → 50%)
-**Effort:** Low  
-**Impact:** +2% overall coverage
+### 2. trackedProductsRepository.js (19% → 71%)
+**Strategy:** Integration tests for search-based tracking functions
 
-**Untested code (lines 96-157):**
-- `validateConfig()` - Test with various env combinations
-- `validateConfigOrExit()` - Test error cases
-- Config parsing logic
-
-**Example test:**
-```javascript
-describe('config validation', () => {
-  it('should validate required fields', () => {
-    // Test with missing PG_USER
-    // Test with missing PG_PASSWORD
-    // Test with valid config
-  });
-});
-```
+**Tests Added:**
+- `addSearchBasedProduct` - Search-based product tracking
+- `getSearchProductsToCheck` - Products due for checking
+- `saveSearchResults` / `getSearchResults` - Search result management
+- `getBestMatch` / `getPriceComparison` - Price comparison utilities
+- `updateSearchResult` - Result updates
 
 ---
 
-### 4. validation.js (93% → 100%)
-**Effort:** Very Low  
-**Impact:** +0.5% overall coverage
+### 3. priceChangeService.js (45% → 98%)
+**Strategy:** Integration tests with real database
 
-**Uncovered lines:** 168-169, 175-176, 279-280, 302, 307, 314
-
-Add edge case tests for remaining uncovered branches.
-
----
-
-## 🔧 Medium Effort (Database Required)
-
-### 5. productRepository.js (0% → 80%)
-**Effort:** Medium  
-**Impact:** +3% overall coverage
-
-**Functions to test:**
-- `saveProduct(data)`
-- `getProductByUrl(url)`
-- `updateProduct(id, data)`
-- `getAllProducts(limit, offset)`
-- `getProductWithHistory(id)`
-
-**Approach:** Use test database like other integration tests
-
-**Example:**
-```javascript
-// tests/integration/db/productRepository.test.js
-import { saveProduct, getProductByUrl } from '../../../src/db/productRepository.js';
-
-describe('productRepository', () => {
-  it('should save and retrieve a product', async () => {
-    const product = {
-      url: 'https://amazon.com/dp/TEST123',
-      title: 'Test Product',
-      price: 99.99,
-      site: 'Amazon'
-    };
-    
-    await saveProduct(product);
-    const retrieved = await getProductByUrl(product.url);
-    
-    expect(retrieved.title).toBe('Test Product');
-  });
-});
-```
+**Tests Added:**
+- `detectPriceChange` - Full price change detection
+- `getRecentPriceChanges` - Recent changes retrieval
+- `getPriceSummary` - Summary statistics
+- `getBiggestPriceDrops` - Price drop analysis
 
 ---
 
-### 6. trackedProductsRepository.js (19% → 60%)
-**Effort:** Medium  
-**Impact:** +2% overall coverage
+### 4. priceAlertService.js (37% → 68%)
+**Strategy:** Unit tests for pure functions
 
-**Untested functions:**
-- `updateProductCheckTime()`
-- `setProductEnabled()`
-- `deleteTrackedProduct()`
-- Search-based tracking functions
+**Tests Added:**
+- `sendPriceAlert` - Alert sending logic
+- `createAlertFromChange` - Alert creation
+- Rate limiting tests
 
 ---
 
-### 7. retentionService.js (4% → 40%)
-**Effort:** Medium  
-**Impact:** +2% overall coverage
+### 5. retentionService.js (4% → 94%)
+**Strategy:** Integration tests with test database
 
-**Untested functions:**
-- `cleanupOldPriceHistory()`
-- `cleanupStaleProducts()`
-- `runRetentionPolicy()`
-
----
-
-### 8. db-retry.js (0% → 70%)
-**Effort:** Medium  
-**Impact:** +1% overall coverage
-
-**Functions to test:**
-- `withRetry()` - Test retry logic
-- `isRetryableError()` - Test error classification
+**Tests Added:**
+- `cleanupPriceHistory` - Old data cleanup
+- `cleanupStaleProducts` - Stale product removal
+- `cleanupSearchResults` - Search result cleanup
+- `runRetentionCleanup` - Full retention workflow
+- `getDatabaseStats` - Statistics gathering
 
 ---
 
-## 🚧 Hard (Requires Complex Mocking)
+### 6. db-retry.js (0% → 100%)
+**Strategy:** Unit tests for retry logic
 
-### 9. Scrapers (amazon.js, burton.js)
+**Tests Added:**
+- `retryDatabaseOperation` - Retry with exponential backoff
+- `testDatabaseConnection` - Connection testing
+- Error handling and recovery
+
+---
+
+### 7. productService.js (0% → 77%)
+**Strategy:** Integration tests
+
+**Tests Added:**
+- `upsertProductAndHistory` - Product upsert with history
+- Multi-currency support
+- Different site handling
+
+---
+
+### 8. config/index.js (15% → 41%)
+**Strategy:** Direct imports of config and validateConfig
+
+**Tests Added:**
+- Config object structure validation
+- `validateConfig()` function testing
+- All config sections (pg, scraper, retention, etc.)
+
+---
+
+### 9. api-server.js (49% → 65%)
+**Strategy:** API integration tests
+
+**Tests Added:**
+- `GET /api/stats` - Database statistics
+- `GET /api/stats/config` - Configuration endpoint
+- `GET /api/price-changes` - Price changes
+- `GET /api/price-changes/drops` - Price drops
+- `GET /api/tracked/:id` - Single tracked product
+- `GET /api/products/:id/history` - Product history
+
+---
+
+### 10. exportService.js (13% → 75%)
+**Strategy:** Actual function imports
+
+**Tests Added:**
+- `exportToJSON` - JSON file export
+- `exportToCSV` - CSV export (throws not implemented)
+- Complex nested data export
+
+---
+
+### 11. connect-pg.js (17% → 29%)
+**Strategy:** Integration tests for utility functions
+
+**Tests Added:**
+- `checkDatabaseHealth` - Health check
+- `getPoolStats` - Pool statistics
+
+---
+
+## 🚀 Future Improvements (To Reach 50%+)
+
+### Hard (Requires Complex Mocking)
+
+#### Scrapers (amazon.js, burton.js)
 **Effort:** High  
 **Impact:** +2% overall coverage
 
 **Challenge:** Requires mocking Playwright
 
-**Options:**
-1. Use `jest.unstable_mockModule` (ESM support is tricky)
-2. Extract pure functions and test those separately
-3. Create integration tests against real pages (slow, flaky)
-
 ---
 
-### 10. Monitors (price-monitor.js, search-monitor.js)
+#### Monitors (price-monitor.js, search-monitor.js)
 **Effort:** High  
 **Impact:** +3% overall coverage
 
@@ -213,61 +201,50 @@ describe('productRepository', () => {
 
 ---
 
-### 11. BrowserPool.js
+#### BrowserPool.js & health-server.js
 **Effort:** High  
-**Impact:** +1% overall coverage
+**Impact:** +3% overall coverage
 
-**Challenge:** Requires mocking Playwright's chromium.launch()
-
----
-
-### 12. proxy-manager.js
-**Effort:** High  
-**Impact:** +2% overall coverage
-
-**Challenge:** Requires mocking network requests
+**Challenge:** Requires complex lifecycle management and mocking
 
 ---
 
-## 📈 Recommended Implementation Path
+## 📈 Implementation Path Summary
 
-### Phase 1: Quick Wins (22.5% → 30%)
-| Task | Coverage Gain | Time |
-|------|---------------|------|
-| Test product-matcher pure functions | +3% | 1 hour |
-| Test config validation | +2% | 30 min |
-| Complete validation.js coverage | +0.5% | 15 min |
-| Test db-retry logic | +1% | 30 min |
-
-**Subtotal: +6.5% → 29% coverage**
+### ✅ Phase 1: Quick Wins (22.5% → 30%) - COMPLETED
+| Task | Status |
+|------|--------|
+| Test product-matcher pure functions | ✅ Done |
+| Test config validation | ✅ Done |
+| Complete validation.js coverage | ✅ Done |
+| Test db-retry logic | ✅ Done |
 
 ---
 
-### Phase 2: Integration Tests (30% → 38%)
-| Task | Coverage Gain | Time |
-|------|---------------|------|
-| productRepository integration tests | +3% | 2 hours |
-| trackedProductsRepository tests | +2% | 1 hour |
-| retentionService integration tests | +2% | 1 hour |
-| priceChangeService DB tests | +1% | 1 hour |
-
-**Subtotal: +8% → 38% coverage**
+### ✅ Phase 2: Integration Tests (30% → 40%) - COMPLETED
+| Task | Status |
+|------|--------|
+| productRepository integration tests | ✅ Done |
+| trackedProductsRepository tests | ✅ Done |
+| retentionService integration tests | ✅ Done |
+| priceChangeService DB tests | ✅ Done |
+| API endpoint tests | ✅ Done |
 
 ---
 
-### Phase 3: Complex Mocking (38% → 50%)
+### 🎯 Phase 3: Complex Mocking (40% → 50%) - NEXT
 | Task | Coverage Gain | Time |
 |------|---------------|------|
 | BrowserPool with Playwright mock | +1% | 3 hours |
 | Scrapers with mock page | +2% | 4 hours |
 | Monitors with full mocking | +3% | 6 hours |
-| proxy-manager with network mock | +2% | 4 hours |
+| health-server tests | +2% | 2 hours |
 
-**Subtotal: +8% → 46% coverage**
+**Target: +8% → 48% coverage**
 
 ---
 
-## 🛠️ Testing Utilities Needed
+## 🛠️ Testing Utilities
 
 ### 1. Playwright Mock Helper
 ```javascript
@@ -310,12 +287,25 @@ npm run test:watch
 
 ## 🎯 Coverage Goals
 
-| Milestone | Target | Status |
-|-----------|--------|--------|
-| MVP | 15% | ✅ Achieved |
-| Good | 30% | ⏳ In Progress |
-| Better | 50% | 🎯 Goal |
-| Excellent | 70% | 🚀 Stretch |
+| Milestone | Target |    Status     |
+|-----------|--------|---------------|
+| MVP       | 15%    | ✅ Achieved   |
+| Good      | 30%    | ✅ Achieved   |
+| **Target**| **40%**| ✅ **Achieved (40.10%)** |
+| Better    | 50%    | 🎯 Next Goal  |
+| Excellent | 70%    | 🚀 Stretch    |
+
+---
+
+## 📊 Key Learnings
+
+1. **Import from Source**: Tests must import actual functions from source files - inline implementations don't count toward coverage.
+
+2. **Integration > Mocking**: For database code, integration tests with a real test DB are more reliable and provide better coverage than complex mocks.
+
+3. **Pure Functions First**: Start with pure functions (no side effects) as they're easiest to test.
+
+4. **API Testing**: Testing API endpoints provides good coverage across multiple layers (routing, validation, database).
 
 ---
 

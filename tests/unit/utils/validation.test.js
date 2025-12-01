@@ -7,7 +7,8 @@ import {
   validateCurrency,
   validateTitle,
   validateCheckInterval,
-  validateProductId
+  validateProductId,
+  validateTrackedProduct
 } from '../../../src/utils/validation.js';
 
 describe('validation', () => {
@@ -276,6 +277,24 @@ describe('validation', () => {
       expect(result.valid).toBe(true);
       expect(result.sanitized).toBe(60);
     });
+
+    it('should reject null intervals', () => {
+      const result = validateCheckInterval(null);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Check interval is required');
+    });
+
+    it('should reject undefined intervals', () => {
+      const result = validateCheckInterval(undefined);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Check interval is required');
+    });
+
+    it('should reject non-numeric strings', () => {
+      const result = validateCheckInterval('not-a-number');
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContain('Check interval must be a valid number');
+    });
   });
 
   describe('validateProductId', () => {
@@ -389,6 +408,88 @@ describe('validation', () => {
         const result = validateScrapedData(data);
         expect(result.valid).toBe(false);
         expect(result.errors.length).toBeGreaterThan(3);
+      });
+    });
+  });
+
+  describe('validateTrackedProduct', () => {
+    const validTrackedProduct = {
+      url: 'https://www.amazon.com/dp/B08N5WRWNW',
+      site: 'Amazon',
+      enabled: true,
+      checkIntervalMinutes: 60,
+    };
+
+    describe('valid data', () => {
+      it('should accept valid tracked product', () => {
+        const result = validateTrackedProduct(validTrackedProduct);
+        expect(result.valid).toBe(true);
+        expect(result.sanitized).toBeDefined();
+        expect(result.sanitized.url).toBe(validTrackedProduct.url);
+      });
+
+      it('should accept minimal valid data (url and site only)', () => {
+        const minimal = {
+          url: 'https://www.amazon.com/dp/B08N5WRWNW',
+          site: 'Amazon',
+        };
+        const result = validateTrackedProduct(minimal);
+        expect(result.valid).toBe(true);
+        expect(result.sanitized.enabled).toBe(true); // Default
+        expect(result.sanitized.checkIntervalMinutes).toBe(60); // Default
+      });
+
+      it('should accept check_interval_minutes snake_case', () => {
+        const data = {
+          url: 'https://www.amazon.com/dp/test',
+          site: 'Amazon',
+          check_interval_minutes: 120,
+        };
+        const result = validateTrackedProduct(data);
+        expect(result.valid).toBe(true);
+        expect(result.sanitized.checkIntervalMinutes).toBe(120);
+      });
+    });
+
+    describe('invalid data', () => {
+      it('should reject null data', () => {
+        const result = validateTrackedProduct(null);
+        expect(result.valid).toBe(false);
+        expect(result.errors).toContain('Data must be an object');
+      });
+
+      it('should reject non-object data', () => {
+        expect(validateTrackedProduct('string').valid).toBe(false);
+        expect(validateTrackedProduct(123).valid).toBe(false);
+        expect(validateTrackedProduct([]).valid).toBe(false);
+      });
+
+      it('should reject invalid URL', () => {
+        const data = { ...validTrackedProduct, url: 'not-a-url' };
+        const result = validateTrackedProduct(data);
+        expect(result.valid).toBe(false);
+        expect(result.errors.some(e => e.includes('URL'))).toBe(true);
+      });
+
+      it('should reject invalid site', () => {
+        const data = { ...validTrackedProduct, site: '' };
+        const result = validateTrackedProduct(data);
+        expect(result.valid).toBe(false);
+        expect(result.errors.some(e => e.includes('Site'))).toBe(true);
+      });
+
+      it('should reject non-boolean enabled', () => {
+        const data = { ...validTrackedProduct, enabled: 'yes' };
+        const result = validateTrackedProduct(data);
+        expect(result.valid).toBe(false);
+        expect(result.errors).toContain('Enabled must be a boolean');
+      });
+
+      it('should reject invalid check interval (too high)', () => {
+        const data = { ...validTrackedProduct, checkIntervalMinutes: 99999 };
+        const result = validateTrackedProduct(data);
+        expect(result.valid).toBe(false);
+        expect(result.errors.some(e => e.includes('Check interval'))).toBe(true);
       });
     });
   });

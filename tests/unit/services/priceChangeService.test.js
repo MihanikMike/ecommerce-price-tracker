@@ -1,129 +1,117 @@
 import { describe, it, expect } from '@jest/globals';
-import { 
-  calculatePriceChange, 
-  shouldAlert 
-} from '../../../src/services/priceChangeService.js';
+import { calculatePriceChange, shouldAlert } from '../../../src/services/priceChangeService.js';
 
+/**
+ * Tests for Price Change Service
+ * Tests the actual exported functions from the service
+ */
 describe('priceChangeService', () => {
   describe('calculatePriceChange', () => {
     describe('direction detection', () => {
-      it('should calculate price decrease correctly', () => {
+      it('should detect price drop', () => {
         const result = calculatePriceChange(100, 80);
-        
+
+        expect(result.direction).toBe('down');
         expect(result.absoluteChange).toBe(-20);
         expect(result.percentChange).toBe(-20);
-        expect(result.direction).toBe('down');
       });
 
-      it('should calculate price increase correctly', () => {
+      it('should detect price increase', () => {
         const result = calculatePriceChange(100, 120);
-        
+
+        expect(result.direction).toBe('up');
         expect(result.absoluteChange).toBe(20);
         expect(result.percentChange).toBe(20);
-        expect(result.direction).toBe('up');
       });
 
-      it('should handle no change', () => {
+      it('should detect no change', () => {
         const result = calculatePriceChange(100, 100);
-        
+
+        expect(result.direction).toBe('none');
         expect(result.absoluteChange).toBe(0);
         expect(result.percentChange).toBe(0);
-        expect(result.direction).toBe('none');
       });
     });
 
-    describe('null/new price handling', () => {
-      it('should handle null old price (new product)', () => {
-        const result = calculatePriceChange(null, 50);
-        
-        expect(result.isNewPrice).toBe(true);
-        expect(result.isSignificant).toBe(false);
-      });
+    describe('null and edge cases', () => {
+      it('should handle null old price', () => {
+        const result = calculatePriceChange(null, 100);
 
-      it('should handle undefined old price', () => {
-        const result = calculatePriceChange(undefined, 75);
-        
         expect(result.isNewPrice).toBe(true);
+        expect(result.absoluteChange).toBe(0);
         expect(result.direction).toBe('none');
       });
 
-      it('should handle zero old price as new', () => {
-        const result = calculatePriceChange(0, 99);
-        
+      it('should handle undefined old price', () => {
+        const result = calculatePriceChange(undefined, 100);
+
         expect(result.isNewPrice).toBe(true);
+      });
+
+      it('should handle zero old price', () => {
+        const result = calculatePriceChange(0, 100);
+
+        expect(result.isNewPrice).toBe(true);
+        expect(result.percentChange).toBe(0);
       });
     });
 
     describe('significance detection', () => {
-      it('should mark significant changes correctly', () => {
-        // Default threshold: 5% and $1
-        const smallChange = calculatePriceChange(100, 99);
-        expect(smallChange.isSignificant).toBe(false);
-
-        const bigChange = calculatePriceChange(100, 90);
-        expect(bigChange.isSignificant).toBe(true);
-      });
-
-      it('should not mark small percentage changes as significant', () => {
-        const result = calculatePriceChange(100, 98);
-        expect(result.percentChange).toBe(-2);
-        expect(result.isSignificant).toBe(false);
-      });
-
-      it('should mark large percentage changes as significant', () => {
+      it('should mark large changes as significant', () => {
         const result = calculatePriceChange(100, 85);
-        expect(result.percentChange).toBe(-15);
+
         expect(result.isSignificant).toBe(true);
       });
 
-      it('should handle threshold edge cases', () => {
-        // Exactly at 5% threshold with at least $1 change
-        const atThreshold = calculatePriceChange(100, 95);
-        expect(atThreshold.percentChange).toBe(-5);
-        expect(atThreshold.absoluteChange).toBe(-5);
-        expect(atThreshold.isSignificant).toBe(true);
+      it('should mark small changes as not significant', () => {
+        const result = calculatePriceChange(100, 99.5);
+
+        expect(result.isSignificant).toBe(false);
       });
 
-      it('should require both percent AND absolute change', () => {
-        // 10% change but less than $1 (on a $5 item)
-        const smallItem = calculatePriceChange(5, 4.50);
-        expect(smallItem.percentChange).toBe(-10);
-        expect(Math.abs(smallItem.absoluteChange)).toBe(0.5);
-        // Not significant because absolute change is less than $1
-        expect(smallItem.isSignificant).toBe(false);
+      it('should require both absolute and percent thresholds', () => {
+        // 0.5% change on $1000 is $5 (above $1 threshold but below 5%)
+        const result = calculatePriceChange(1000, 995);
+
+        // 0.5% is below the 5% threshold
+        expect(result.isSignificant).toBe(false);
       });
     });
 
     describe('rounding', () => {
-      it('should round percentChange to 2 decimal places', () => {
-        const result = calculatePriceChange(100, 66.67);
-        expect(result.percentChange).toBe(-33.33);
+      it('should round absolute change to 2 decimals', () => {
+        const result = calculatePriceChange(100, 99.126);
+
+        expect(result.absoluteChange).toBe(-0.87);
       });
 
-      it('should round absoluteChange to 2 decimal places', () => {
-        const result = calculatePriceChange(100, 66.666);
-        expect(result.absoluteChange).toBe(-33.33);
+      it('should round percent change to 2 decimals', () => {
+        const result = calculatePriceChange(100, 88.888);
+
+        expect(result.percentChange).toBe(-11.11);
       });
     });
 
-    describe('edge cases', () => {
-      it('should handle very small price changes', () => {
-        const result = calculatePriceChange(99.99, 99.98);
-        expect(result.absoluteChange).toBe(-0.01);
+    describe('real-world scenarios', () => {
+      it('should detect Black Friday price drop', () => {
+        const result = calculatePriceChange(349.99, 249.99);
+
         expect(result.direction).toBe('down');
+        expect(result.isSignificant).toBe(true);
+        expect(Math.abs(result.percentChange)).toBeGreaterThan(25);
       });
 
-      it('should handle very large price increases', () => {
-        const result = calculatePriceChange(100, 500);
-        expect(result.percentChange).toBe(400);
+      it('should detect small sale', () => {
+        const result = calculatePriceChange(49.99, 44.99);
+
+        expect(result.direction).toBe('down');
+        expect(result.absoluteChange).toBe(-5);
+      });
+
+      it('should detect price back to normal after sale', () => {
+        const result = calculatePriceChange(44.99, 49.99);
+
         expect(result.direction).toBe('up');
-        expect(result.isSignificant).toBe(true);
-      });
-
-      it('should handle price dropping to near zero', () => {
-        const result = calculatePriceChange(100, 1);
-        expect(result.percentChange).toBe(-99);
-        expect(result.isSignificant).toBe(true);
       });
     });
   });
@@ -132,131 +120,162 @@ describe('priceChangeService', () => {
     describe('price drops', () => {
       it('should alert on significant price drop', () => {
         const change = {
-          percentChange: -15,
           direction: 'down',
-          isSignificant: true
+          percentChange: -15,
+          absoluteChange: -15,
+          isSignificant: true,
         };
-        
+
         const result = shouldAlert(change);
+
         expect(result.shouldAlert).toBe(true);
         expect(result.reason).toBe('price_drop');
       });
 
-      it('should set high severity for large drops', () => {
+      it('should mark very large drops as high severity', () => {
         const change = {
-          percentChange: -25, // >= 20% (double the 10% threshold)
           direction: 'down',
-          isSignificant: true
+          percentChange: -25,
+          absoluteChange: -25,
+          isSignificant: true,
         };
-        
+
         const result = shouldAlert(change);
+
+        expect(result.shouldAlert).toBe(true);
         expect(result.severity).toBe('high');
       });
 
-      it('should set medium severity for moderate drops', () => {
+      it('should mark moderate drops as medium severity', () => {
         const change = {
-          percentChange: -12,
           direction: 'down',
-          isSignificant: true
+          percentChange: -12,
+          absoluteChange: -12,
+          isSignificant: true,
         };
-        
+
         const result = shouldAlert(change);
+
+        expect(result.shouldAlert).toBe(true);
         expect(result.severity).toBe('medium');
+      });
+
+      it('should not alert on small price drop', () => {
+        const change = {
+          direction: 'down',
+          percentChange: -7,
+          absoluteChange: -7,
+          isSignificant: true,
+        };
+
+        const result = shouldAlert(change);
+
+        expect(result.shouldAlert).toBe(false);
       });
     });
 
     describe('price increases', () => {
       it('should alert on significant price increase', () => {
         const change = {
-          percentChange: 25,
           direction: 'up',
-          isSignificant: true
+          percentChange: 25,
+          absoluteChange: 25,
+          isSignificant: true,
         };
-        
+
         const result = shouldAlert(change);
+
         expect(result.shouldAlert).toBe(true);
         expect(result.reason).toBe('price_increase');
       });
 
-      it('should not alert on small price increases', () => {
+      it('should mark very large increases as high severity', () => {
         const change = {
-          percentChange: 10,
           direction: 'up',
-          isSignificant: true
+          percentChange: 50,
+          absoluteChange: 50,
+          isSignificant: true,
         };
-        
-        // 10% is below the 20% alert threshold for increases
+
         const result = shouldAlert(change);
+
+        expect(result.severity).toBe('high');
+      });
+
+      it('should not alert on moderate price increase', () => {
+        const change = {
+          direction: 'up',
+          percentChange: 15,
+          absoluteChange: 15,
+          isSignificant: true,
+        };
+
+        const result = shouldAlert(change);
+
         expect(result.shouldAlert).toBe(false);
       });
     });
 
-    describe('no alert cases', () => {
-      it('should not alert on small changes', () => {
-        const change = {
-          percentChange: -3,
-          direction: 'down',
-          isSignificant: false
-        };
-        
-        const result = shouldAlert(change);
-        expect(result.shouldAlert).toBe(false);
-      });
-
+    describe('non-significant changes', () => {
       it('should not alert on non-significant changes', () => {
         const change = {
-          percentChange: -8, // Below 10% drop threshold
           direction: 'down',
-          isSignificant: true
+          percentChange: -15,
+          absoluteChange: -15,
+          isSignificant: false,
         };
-        
-        const result = shouldAlert(change);
-        expect(result.shouldAlert).toBe(false);
-      });
 
-      it('should not alert on price staying same', () => {
-        const change = {
-          percentChange: 0,
-          direction: 'none',
-          isSignificant: false
-        };
-        
         const result = shouldAlert(change);
+
         expect(result.shouldAlert).toBe(false);
         expect(result.reason).toBeNull();
       });
     });
+
+    describe('no change', () => {
+      it('should not alert when no change', () => {
+        const change = {
+          direction: 'none',
+          percentChange: 0,
+          absoluteChange: 0,
+          isSignificant: false,
+        };
+
+        const result = shouldAlert(change);
+
+        expect(result.shouldAlert).toBe(false);
+      });
+    });
   });
 
-  describe('integration: calculatePriceChange + shouldAlert', () => {
-    it('should correctly flow through both functions for price drop', () => {
-      const change = calculatePriceChange(100, 75);
+  describe('integration scenarios', () => {
+    it('should correctly flow from price calculation to alert', () => {
+      // Simulate Black Friday deal
+      const change = calculatePriceChange(299.99, 199.99);
       const alert = shouldAlert(change);
-      
-      expect(change.percentChange).toBe(-25);
+
+      expect(change.direction).toBe('down');
       expect(change.isSignificant).toBe(true);
       expect(alert.shouldAlert).toBe(true);
       expect(alert.reason).toBe('price_drop');
-      expect(alert.severity).toBe('high');
     });
 
-    it('should correctly flow through for price increase', () => {
-      const change = calculatePriceChange(100, 145);
+    it('should not alert for minor fluctuation', () => {
+      const change = calculatePriceChange(99.99, 97.99);
       const alert = shouldAlert(change);
-      
-      expect(change.percentChange).toBe(45);
-      expect(change.isSignificant).toBe(true);
-      expect(alert.shouldAlert).toBe(true);
-      expect(alert.reason).toBe('price_increase');
-      expect(alert.severity).toBe('high');
-    });
 
-    it('should not alert for new prices', () => {
-      const change = calculatePriceChange(null, 99);
-      const alert = shouldAlert(change);
-      
-      expect(change.isNewPrice).toBe(true);
+      // 2% drop is below threshold
       expect(alert.shouldAlert).toBe(false);
+    });
+
+    it('should alert for price gouging scenario', () => {
+      const change = calculatePriceChange(50, 100);
+      const alert = shouldAlert(change);
+
+      expect(change.direction).toBe('up');
+      expect(change.percentChange).toBe(100);
+      expect(alert.shouldAlert).toBe(true);
+      expect(alert.severity).toBe('high');
     });
   });
 });

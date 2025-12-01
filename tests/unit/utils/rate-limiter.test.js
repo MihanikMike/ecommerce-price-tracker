@@ -241,4 +241,93 @@ describe('RateLimiter', () => {
       expect(rateLimiter.consecutiveErrors.get(burtonKey) || 0).toBe(0);
     });
   });
+
+  describe('getStats', () => {
+    it('should return stats object', () => {
+      const stats = rateLimiter.getStats();
+      expect(typeof stats).toBe('object');
+    });
+
+    it('should include amazon.com stats', () => {
+      // Make a request to amazon first to populate tracking
+      rateLimiter.waitForRateLimit('https://amazon.com/dp/B123');
+      
+      const stats = rateLimiter.getStats();
+      expect(stats['amazon.com']).toBeDefined();
+    });
+
+    it('should track backoff levels', () => {
+      const amazonUrl = 'https://amazon.com/dp/B123';
+      const siteKey = rateLimiter.getSiteKey(amazonUrl);
+      
+      rateLimiter.backoffLevel.set(siteKey, 2);
+      rateLimiter.waitForRateLimit(amazonUrl);
+      
+      const stats = rateLimiter.getStats();
+      expect(stats['amazon.com'].backoffLevel).toBe(2);
+    });
+
+    it('should track consecutive errors', () => {
+      const amazonUrl = 'https://amazon.com/dp/B123';
+      
+      rateLimiter.reportError(amazonUrl, new Error('test'));
+      rateLimiter.reportError(amazonUrl, new Error('test'));
+      
+      const stats = rateLimiter.getStats();
+      expect(stats['amazon.com'].consecutiveErrors).toBe(2);
+    });
+  });
+
+  describe('reset', () => {
+    it('should clear all tracking state', () => {
+      const amazonUrl = 'https://amazon.com/dp/B123';
+      const siteKey = rateLimiter.getSiteKey(amazonUrl);
+      
+      // Set up some state
+      rateLimiter.lastRequestTime.set(siteKey, Date.now());
+      rateLimiter.backoffLevel.set(siteKey, 3);
+      rateLimiter.consecutiveErrors.set(siteKey, 5);
+      
+      // Reset
+      rateLimiter.reset();
+      
+      // Verify all cleared
+      expect(rateLimiter.lastRequestTime.size).toBe(0);
+      expect(rateLimiter.backoffLevel.size).toBe(0);
+      expect(rateLimiter.consecutiveErrors.size).toBe(0);
+    });
+  });
+
+  describe('updateSiteConfig', () => {
+    it('should update existing site config', () => {
+      const originalConfig = { ...rateLimiter.siteConfigs['amazon.com'] };
+      
+      rateLimiter.updateSiteConfig('amazon.com', { minDelayMs: 5000 });
+      
+      expect(rateLimiter.siteConfigs['amazon.com'].minDelayMs).toBe(5000);
+      
+      // Restore original
+      rateLimiter.siteConfigs['amazon.com'] = originalConfig;
+    });
+
+    it('should merge with existing config', () => {
+      const originalConfig = { ...rateLimiter.siteConfigs['amazon.com'] };
+      
+      rateLimiter.updateSiteConfig('amazon.com', { minDelayMs: 6000 });
+      
+      // Other properties should remain unchanged
+      expect(rateLimiter.siteConfigs['amazon.com'].maxRequestsPerMinute).toBe(originalConfig.maxRequestsPerMinute);
+      
+      // Restore original
+      rateLimiter.siteConfigs['amazon.com'] = originalConfig;
+    });
+
+    it('should not update non-existent sites', () => {
+      const before = { ...rateLimiter.siteConfigs };
+      
+      rateLimiter.updateSiteConfig('nonexistent.com', { minDelayMs: 1000 });
+      
+      expect(rateLimiter.siteConfigs['nonexistent.com']).toBeUndefined();
+    });
+  });
 });

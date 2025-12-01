@@ -1,7 +1,251 @@
 import { describe, it, expect } from '@jest/globals';
-import { findBestMatch, calculateMatchScore } from '../../../src/search/product-matcher.js';
+import productMatcher, { findBestMatch, calculateMatchScore, comparePrices } from '../../../src/search/product-matcher.js';
+
+// Access internal functions through the default export
+const { levenshteinDistance, normalizeText, tokenize } = productMatcher;
 
 describe('product-matcher', () => {
+  describe('levenshteinDistance', () => {
+    it('should return 0 for identical strings', () => {
+      expect(levenshteinDistance('hello', 'hello')).toBe(0);
+    });
+
+    it('should return string length for empty comparison', () => {
+      expect(levenshteinDistance('hello', '')).toBe(5);
+      expect(levenshteinDistance('', 'hello')).toBe(5);
+    });
+
+    it('should return 0 for two empty strings', () => {
+      expect(levenshteinDistance('', '')).toBe(0);
+    });
+
+    it('should calculate single character difference', () => {
+      expect(levenshteinDistance('cat', 'bat')).toBe(1);
+      expect(levenshteinDistance('cat', 'car')).toBe(1);
+    });
+
+    it('should handle insertion', () => {
+      expect(levenshteinDistance('cat', 'cats')).toBe(1);
+    });
+
+    it('should handle deletion', () => {
+      expect(levenshteinDistance('cats', 'cat')).toBe(1);
+    });
+
+    it('should handle multiple edits', () => {
+      expect(levenshteinDistance('kitten', 'sitting')).toBe(3);
+    });
+
+    it('should be case sensitive', () => {
+      expect(levenshteinDistance('Hello', 'hello')).toBe(1);
+    });
+  });
+
+  describe('normalizeText', () => {
+    it('should convert to lowercase', () => {
+      expect(normalizeText('HELLO World')).toBe('hello world');
+    });
+
+    it('should remove special characters', () => {
+      expect(normalizeText('hello-world!')).toBe('hello world');
+      expect(normalizeText('product@#$%name')).toBe('product name');
+    });
+
+    it('should normalize whitespace', () => {
+      expect(normalizeText('hello    world')).toBe('hello world');
+      expect(normalizeText('  hello  world  ')).toBe('hello world');
+    });
+
+    it('should handle empty string', () => {
+      expect(normalizeText('')).toBe('');
+    });
+
+    it('should handle null/undefined', () => {
+      expect(normalizeText(null)).toBe('');
+      expect(normalizeText(undefined)).toBe('');
+    });
+
+    it('should preserve numbers', () => {
+      expect(normalizeText('iPhone 15 Pro')).toBe('iphone 15 pro');
+    });
+
+    it('should handle complex product names', () => {
+      expect(normalizeText('Sony WH-1000XM5 (Black)')).toBe('sony wh 1000xm5 black');
+    });
+  });
+
+  describe('tokenize', () => {
+    it('should split text into words', () => {
+      expect(tokenize('hello world')).toEqual(['hello', 'world']);
+    });
+
+    it('should filter single character words', () => {
+      expect(tokenize('a big cat')).toEqual(['big', 'cat']);
+    });
+
+    it('should normalize before tokenizing', () => {
+      expect(tokenize('Hello, World!')).toEqual(['hello', 'world']);
+    });
+
+    it('should handle empty string', () => {
+      expect(tokenize('')).toEqual([]);
+    });
+
+    it('should handle product names', () => {
+      expect(tokenize('Apple iPhone 15 Pro Max')).toEqual(['apple', 'iphone', '15', 'pro', 'max']);
+    });
+  });
+
+  describe('comparePrices', () => {
+    it('should return null values for empty array', () => {
+      const result = comparePrices([]);
+
+      expect(result.lowestPrice).toBeNull();
+      expect(result.highestPrice).toBeNull();
+      expect(result.averagePrice).toBeNull();
+      expect(result.priceRange).toBeNull();
+    });
+
+    it('should return null values for null/undefined input', () => {
+      const result = comparePrices(null);
+
+      expect(result.lowestPrice).toBeNull();
+    });
+
+    it('should find lowest and highest prices', () => {
+      const products = [
+        { title: 'Product A', price: 99.99, site: 'Amazon' },
+        { title: 'Product B', price: 149.99, site: 'BestBuy' },
+        { title: 'Product C', price: 79.99, site: 'Walmart' },
+      ];
+
+      const result = comparePrices(products);
+
+      expect(result.lowestPrice.price).toBe(79.99);
+      expect(result.lowestPrice.site).toBe('Walmart');
+      expect(result.highestPrice.price).toBe(149.99);
+      expect(result.highestPrice.site).toBe('BestBuy');
+    });
+
+    it('should calculate average price', () => {
+      const products = [
+        { title: 'A', price: 100, site: 'Amazon' },
+        { title: 'B', price: 200, site: 'BestBuy' },
+        { title: 'C', price: 300, site: 'Walmart' },
+      ];
+
+      const result = comparePrices(products);
+
+      expect(result.averagePrice).toBe(200);
+    });
+
+    it('should calculate price range', () => {
+      const products = [
+        { title: 'A', price: 50, site: 'Amazon' },
+        { title: 'B', price: 150, site: 'BestBuy' },
+      ];
+
+      const result = comparePrices(products);
+
+      expect(result.priceRange).toBe(100);
+      expect(result.savings).toBe(100);
+    });
+
+    it('should calculate savings percentage', () => {
+      const products = [
+        { title: 'A', price: 80, site: 'Amazon' },
+        { title: 'B', price: 100, site: 'BestBuy' },
+      ];
+
+      const result = comparePrices(products);
+
+      expect(result.savingsPercent).toBe(20); // 20% savings
+    });
+
+    it('should filter out products with zero or invalid prices', () => {
+      const products = [
+        { title: 'A', price: 100, site: 'Amazon' },
+        { title: 'B', price: 0, site: 'BestBuy' },
+        { title: 'C', price: -50, site: 'Walmart' },
+        { title: 'D', price: null, site: 'Target' },
+      ];
+
+      const result = comparePrices(products);
+
+      expect(result.lowestPrice.price).toBe(100);
+      expect(result.allPrices.length).toBe(1);
+    });
+
+    it('should generate best_price recommendation', () => {
+      const products = [
+        { title: 'A', price: 99, site: 'Amazon' },
+        { title: 'B', price: 129, site: 'BestBuy' },
+      ];
+
+      const result = comparePrices(products);
+
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      const bestPrice = result.recommendations.find(r => r.type === 'best_price');
+      expect(bestPrice).toBeDefined();
+      expect(bestPrice.message).toContain('Amazon');
+    });
+
+    it('should generate savings_opportunity when difference is significant', () => {
+      const products = [
+        { title: 'A', price: 80, site: 'Amazon' },
+        { title: 'B', price: 100, site: 'BestBuy' },
+      ];
+
+      const result = comparePrices(products);
+
+      const savingsRec = result.recommendations.find(r => r.type === 'savings_opportunity');
+      expect(savingsRec).toBeDefined();
+      expect(savingsRec.savings).toBe('20.00');
+    });
+
+    it('should include all prices sorted in result', () => {
+      const products = [
+        { title: 'A', price: 150, site: 'Amazon', url: 'a.com' },
+        { title: 'B', price: 100, site: 'BestBuy', url: 'b.com' },
+        { title: 'C', price: 125, site: 'Walmart', url: 'c.com' },
+      ];
+
+      const result = comparePrices(products);
+
+      expect(result.allPrices.length).toBe(3);
+      expect(result.allPrices[0].price).toBe(100);
+      expect(result.allPrices[1].price).toBe(125);
+      expect(result.allPrices[2].price).toBe(150);
+    });
+
+    it('should handle single product', () => {
+      const products = [{ title: 'A', price: 100, site: 'Amazon' }];
+
+      const result = comparePrices(products);
+
+      expect(result.lowestPrice.price).toBe(100);
+      expect(result.highestPrice.price).toBe(100);
+      expect(result.priceRange).toBe(0);
+    });
+
+    it('should handle available/unavailable products', () => {
+      const products = [
+        { title: 'A', price: 80, site: 'Amazon', available: false },
+        { title: 'B', price: 100, site: 'BestBuy', available: true },
+        { title: 'C', price: 90, site: 'Walmart', available: true },
+      ];
+
+      const result = comparePrices(products);
+
+      // Should still include unavailable in lowest if it's cheapest
+      expect(result.lowestPrice.price).toBe(80);
+      
+      // Should have best_available recommendation
+      const bestAvailable = result.recommendations.find(r => r.type === 'best_available');
+      expect(bestAvailable).toBeDefined();
+    });
+  });
+
   describe('calculateMatchScore', () => {
     describe('exact and near-exact matches', () => {
       it('should score exact match highly', () => {
