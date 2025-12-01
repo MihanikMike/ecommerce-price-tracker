@@ -5,6 +5,7 @@
 
 import logger from "../utils/logger.js";
 import config from "../config/index.js";
+import { sendPriceAlertEmail, verifyEmailConfig } from "./emailService.js";
 
 /**
  * Alert notification channels
@@ -201,7 +202,7 @@ async function sendWebhookAlert(formattedAlert, webhookUrl) {
 }
 
 /**
- * Send alert via email channel (placeholder)
+ * Send alert via email channel
  * @param {Object} formattedAlert - Formatted alert message
  * @param {Array<string>} recipients - Email recipients
  */
@@ -211,14 +212,28 @@ async function sendEmailAlert(formattedAlert, recipients) {
         return { success: false, error: 'No email recipients configured' };
     }
 
-    // Placeholder for email implementation
-    // Would integrate with nodemailer, SendGrid, AWS SES, etc.
-    logger.info({ 
-        recipients, 
-        subject: formattedAlert.subject,
-    }, 'Email alert would be sent (not implemented)');
-
-    return { success: true, note: 'Email sending not implemented' };
+    try {
+        // Use the email service to send the alert
+        const result = await sendPriceAlertEmail(formattedAlert.data, recipients);
+        
+        if (result.success) {
+            logger.info({ 
+                recipients, 
+                subject: formattedAlert.subject,
+                messageId: result.messageId,
+            }, 'Email alert sent successfully');
+        } else {
+            logger.warn({ 
+                recipients, 
+                error: result.error,
+            }, 'Email alert failed');
+        }
+        
+        return result;
+    } catch (error) {
+        logger.error({ error: error.message, recipients }, 'Email alert error');
+        return { success: false, error: error.message };
+    }
 }
 
 /**

@@ -1,18 +1,24 @@
 /**
- * Search Engine Scraper
+ * Search Engine Module
  * 
- * Searches DuckDuckGo HTML for product URLs with anti-detection measures.
- * DuckDuckGo HTML version is preferred because:
- * - No bot detection (simple HTML page)
- * - No JavaScript required
- * - Fast and reliable
- * - Good e-commerce results
+ * Multi-engine search with automatic fallback (ALL FREE, NO API KEYS):
+ * 1. DuckDuckGo HTML (free, browser-based scraping)
+ * 2. Google (free, browser-based scraping)
+ * 3. Bing (free, browser-based scraping)
+ * 
+ * Features:
+ * - Automatic fallback when one engine fails
+ * - E-commerce domain prioritization
+ * - Rate limiting and anti-detection
+ * - Configurable engine order
+ * - No API keys required!
  */
 
 import { browserPool } from "../utils/BrowserPool.js";
 import { randomUA } from "../utils/useragents.js";
 import logger from "../utils/logger.js";
 import { rateLimiter } from "../utils/rate-limiter.js";
+import config from "../config/index.js";
 
 /**
  * Known e-commerce domains to prioritize in search results
@@ -82,11 +88,12 @@ const EXCLUDED_DOMAINS = [
  * Search configuration
  */
 const SEARCH_CONFIG = {
-    maxResults: 10,           // Maximum results to return
-    timeout: 30000,           // Page load timeout
+    maxResults: config.search?.maxResults || 10,
+    timeout: config.search?.timeout || 30000,
     minDelay: 3000,           // Minimum delay between searches
     maxDelay: 7000,           // Maximum delay between searches
-    retries: 3,               // Number of retry attempts
+    retries: config.search?.retries || 3,
+    engines: config.search?.engines || ['duckduckgo', 'google', 'bing'],
 };
 
 /**
@@ -224,6 +231,367 @@ async function parseDuckDuckGoResults(page) {
 
 // Keep for backward compatibility
 const parseBingResults = parseDuckDuckGoResults;
+
+// ============================================================================
+// Google Search (Free, Browser-Based Scraping)
+// ============================================================================
+
+/**
+ * Parse Google search results from page
+ */
+async function parseGoogleResults(page) {
+    const results = [];
+    
+    try {
+        // Google uses various selectors for search results
+        // Try multiple selectors for robustness
+        const resultSelectors = [
+            'div.g',           // Standard results
+            'div[data-hveid]', // Results with hveid
+            '.rc',             // Older layout
+        ];
+        
+        let resultElements = [];
+        for (const selector of resultSelectors) {
+            resultElements = await page.$$(selector);
+            if (resultElements.length > 0) {
+                logger.debug({ selector, count: resultElements.length }, 'Found Google results with selector');
+                break;
+            }
+        }
+        
+        for (const element of resultElements) {
+            try {
+                // Get the link - try multiple selectors
+                let linkElement = await element.$('a[href^="http"]');
+                if (!linkElement) linkElement = await element.$('a[data-ved]');
+                if (!linkElement) continue;
+                
+                let href = await linkElement.getAttribute('href');
+                
+                // Skip Google redirect URLs
+                if (href && href.includes('google.com/url')) {
+                    try {
+                        const url = new URL(href);
+                        href = url.searchParams.get('url') || url.searchParams.get('q') || href;
+                    } catch (e) {
+                        // Keep original href
+                    }
+                }
+                
+                // Get title
+                const titleElement = await element.$('h3');
+                const title = titleElement ? await titleElement.innerText() : '';
+                
+                // Get snippet
+                const snippetSelectors = [
+                    'div[data-sncf]',
+                    '.VwiC3b',
+                    'span.st',
+                    'div.IsZvec',
+                ];
+                let snippet = '';
+                for (const sel of snippetSelectors) {
+                    const snippetEl = await element.$(sel);
+                    if (snippetEl) {
+                        snippet = await snippetEl.innerText();
+                        break;
+                    }
+                }
+                
+                // Skip if no valid URL or excluded domain
+                if (!href || !href.startsWith('http') || isExcludedDomain(href)) {
+                    continue;
+                }
+                
+                // Skip Google's own pages
+                if (href.includes('google.com') || href.includes('gstatic.com')) {
+                    continue;
+                }
+                
+                const ecommerceInfo = getEcommerceDomainInfo(href);
+                
+                results.push({
+                    url: href,
+                    title: title?.trim() || '',
+                    snippet: snippet?.trim() || '',
+                    domain: extractDomain(href),
+                    isEcommerce: !!ecommerceInfo,
+                    siteName: ecommerceInfo?.name || extractDomain(href),
+                    priority: ecommerceInfo?.priority || 0,
+                    source: 'google',
+                });
+            } catch (err) {
+                logger.debug({ error: err.message }, 'Failed to parse single Google result');
+            }
+        }
+    } catch (err) {
+        logger.error({ error: err }, 'Failed to parse Google search results');
+    }
+    
+    return results;
+}
+
+/**
+ * Search using Google (free, browser-based scraping)
+ * No API key required - uses direct browser access
+ * 
+ * Note: Google may show CAPTCHA for automated access. 
+ * Use with appropriate delays and consider it a fallback option.
+ * 
+ * @param {string} query - Search query
+ * @param {Object} options - Search options
+ * @returns {Promise<Array>} Array of search results
+ */
+export async function searchGoogle(query, options = {}) {
+    const {
+        maxResults = SEARCH_CONFIG.maxResults,
+        ecommerceOnly = true,
+        prioritizeEcommerce = true,
+    } = options;
+
+    // Build Google search URL
+    const params = new URLSearchParams({
+        q: query,
+        num: Math.min(maxResults + 5, 20).toString(), // Request extra for filtering
+        hl: 'en',
+    });
+    const searchUrl = `https://www.google.com/search?${params.toString()}`;
+    
+    logger.info({ query, searchUrl }, 'Performing Google search (browser-based)');
+    
+    // Apply rate limiting
+    await rateLimiter.waitForRateLimit(searchUrl);
+    await randomDelay(2000, 5000);
+    
+    let browser = null;
+    let context = null;
+    
+    try {
+        browser = await browserPool.acquire();
+        const stealthResult = await createStealthContext(browser);
+        context = stealthResult.context;
+        
+        const page = await context.newPage();
+        
+        // Navigate to Google
+        await page.goto(searchUrl, { 
+            waitUntil: 'domcontentloaded', 
+            timeout: SEARCH_CONFIG.timeout 
+        });
+        
+        // Wait for results
+        try {
+            await page.waitForSelector('div.g, div[data-hveid]', { timeout: 10000 });
+        } catch (e) {
+            // Check for CAPTCHA
+            const captchaExists = await page.$('#captcha-form, .g-recaptcha, #recaptcha');
+            if (captchaExists) {
+                throw new Error('Google CAPTCHA detected - try again later or use different search engine');
+            }
+            logger.warn({ query }, 'No Google results selector found');
+        }
+        
+        await randomDelay(1000, 2000);
+        
+        // Parse results
+        let results = await parseGoogleResults(page);
+        
+        logger.info({ query, totalResults: results.length }, 'Parsed Google search results');
+        
+        // Filter to e-commerce only if requested
+        if (ecommerceOnly) {
+            results = results.filter(r => r.isEcommerce);
+        }
+        
+        // Sort by priority
+        if (prioritizeEcommerce) {
+            results.sort((a, b) => b.priority - a.priority);
+        }
+        
+        results = results.slice(0, maxResults);
+        
+        logger.info({ 
+            query, 
+            filteredResults: results.length,
+            sites: results.map(r => r.siteName),
+        }, 'Google search completed');
+        
+        return results;
+        
+    } catch (err) {
+        logger.error({ error: err.message, query }, 'Google search failed');
+        throw err;
+    } finally {
+        if (context) {
+            await context.close().catch(() => {});
+        }
+        if (browser) {
+            browserPool.release(browser);
+        }
+    }
+}
+
+// ============================================================================
+// Bing Search (Free, Browser-Based Scraping)
+// ============================================================================
+
+/**
+ * Parse Bing search results from page
+ */
+async function parseBingSearchResults(page) {
+    const results = [];
+    
+    try {
+        // Bing uses li.b_algo for search results
+        const resultElements = await page.$$('li.b_algo');
+        
+        logger.debug({ count: resultElements.length }, 'Found Bing results');
+        
+        for (const element of resultElements) {
+            try {
+                // Get the main link
+                const linkElement = await element.$('h2 a');
+                if (!linkElement) continue;
+                
+                const href = await linkElement.getAttribute('href');
+                const title = await linkElement.innerText();
+                
+                // Get snippet
+                const snippetElement = await element.$('.b_caption p, .b_algoSlug');
+                const snippet = snippetElement ? await snippetElement.innerText() : '';
+                
+                // Skip if no valid URL or excluded domain
+                if (!href || !href.startsWith('http') || isExcludedDomain(href)) {
+                    continue;
+                }
+                
+                // Skip Bing's own pages
+                if (href.includes('bing.com') || href.includes('microsoft.com')) {
+                    continue;
+                }
+                
+                const ecommerceInfo = getEcommerceDomainInfo(href);
+                
+                results.push({
+                    url: href,
+                    title: title?.trim() || '',
+                    snippet: snippet?.trim() || '',
+                    domain: extractDomain(href),
+                    isEcommerce: !!ecommerceInfo,
+                    siteName: ecommerceInfo?.name || extractDomain(href),
+                    priority: ecommerceInfo?.priority || 0,
+                    source: 'bing',
+                });
+            } catch (err) {
+                logger.debug({ error: err.message }, 'Failed to parse single Bing result');
+            }
+        }
+    } catch (err) {
+        logger.error({ error: err }, 'Failed to parse Bing search results');
+    }
+    
+    return results;
+}
+
+/**
+ * Search using Bing (free, browser-based scraping)
+ * No API key required - uses direct browser access
+ * 
+ * Note: Bing may show CAPTCHA for automated access.
+ * Use with appropriate delays and consider it a fallback option.
+ * 
+ * @param {string} query - Search query
+ * @param {Object} options - Search options
+ * @returns {Promise<Array>} Array of search results
+ */
+export async function searchBingAPI(query, options = {}) {
+    const {
+        maxResults = SEARCH_CONFIG.maxResults,
+        ecommerceOnly = true,
+        prioritizeEcommerce = true,
+    } = options;
+
+    // Build Bing search URL
+    const params = new URLSearchParams({
+        q: query,
+        count: Math.min(maxResults + 5, 30).toString(),
+    });
+    const searchUrl = `https://www.bing.com/search?${params.toString()}`;
+    
+    logger.info({ query, searchUrl }, 'Performing Bing search (browser-based)');
+    
+    // Apply rate limiting
+    await rateLimiter.waitForRateLimit(searchUrl);
+    await randomDelay(2000, 5000);
+    
+    let browser = null;
+    let context = null;
+    
+    try {
+        browser = await browserPool.acquire();
+        const stealthResult = await createStealthContext(browser);
+        context = stealthResult.context;
+        
+        const page = await context.newPage();
+        
+        // Navigate to Bing
+        await page.goto(searchUrl, { 
+            waitUntil: 'domcontentloaded', 
+            timeout: SEARCH_CONFIG.timeout 
+        });
+        
+        // Wait for results
+        try {
+            await page.waitForSelector('li.b_algo', { timeout: 10000 });
+        } catch (e) {
+            // Check for CAPTCHA
+            const captchaExists = await page.$('#b_captcha, .b_captcha');
+            if (captchaExists) {
+                throw new Error('Bing CAPTCHA detected - try again later or use different search engine');
+            }
+            logger.warn({ query }, 'No Bing results selector found');
+        }
+        
+        await randomDelay(1000, 2000);
+        
+        // Parse results
+        let results = await parseBingSearchResults(page);
+        
+        logger.info({ query, totalResults: results.length }, 'Parsed Bing search results');
+        
+        // Filter to e-commerce only if requested
+        if (ecommerceOnly) {
+            results = results.filter(r => r.isEcommerce);
+        }
+        
+        // Sort by priority
+        if (prioritizeEcommerce) {
+            results.sort((a, b) => b.priority - a.priority);
+        }
+        
+        results = results.slice(0, maxResults);
+        
+        logger.info({ 
+            query, 
+            filteredResults: results.length,
+            sites: results.map(r => r.siteName),
+        }, 'Bing search completed');
+        
+        return results;
+        
+    } catch (err) {
+        logger.error({ error: err.message, query }, 'Bing search failed');
+        throw err;
+    } finally {
+        if (context) {
+            await context.close().catch(() => {});
+        }
+        if (browser) {
+            browserPool.release(browser);
+        }
+    }
+}
 
 /**
  * Firefox user agents (less detected by Bing)
@@ -491,20 +859,123 @@ export async function searchProduct(productName, options = {}) {
 
 /**
  * Search for a product across multiple search engines (fallback strategy)
+ * Uses configured engine order with automatic fallback
+ * 
+ * @param {string} productName - Product name to search
+ * @param {Object} options - Search options
+ * @returns {Promise<Object>} Object with engine used and results array
  */
 export async function searchProductWithFallback(productName, options = {}) {
-    // Primary: DuckDuckGo
-    try {
-        const results = await searchProduct(productName, options);
-        if (results.length > 0) {
-            return { engine: 'duckduckgo', results };
+    const {
+        keywords = [],
+        maxResults = SEARCH_CONFIG.maxResults,
+        engines = SEARCH_CONFIG.engines,
+    } = options;
+
+    // Build search query
+    const queryParts = [productName, ...keywords, 'buy', 'price'];
+    const query = queryParts.join(' ');
+
+    const searchOptions = {
+        maxResults,
+        ecommerceOnly: true,
+        prioritizeEcommerce: true,
+    };
+
+    const errors = [];
+
+    // Try each search engine in order
+    // All engines are free browser-based scraping - no API keys required
+    for (const engine of engines) {
+        try {
+            let results = [];
+            
+            switch (engine.toLowerCase()) {
+                case 'duckduckgo':
+                case 'ddg':
+                    logger.info({ engine: 'duckduckgo', query }, 'Trying DuckDuckGo search (browser-based)');
+                    results = await searchDuckDuckGo(query, searchOptions);
+                    break;
+                    
+                case 'google':
+                    logger.info({ engine: 'google', query }, 'Trying Google search (browser-based)');
+                    results = await searchGoogle(query, searchOptions);
+                    break;
+                    
+                case 'bing':
+                    logger.info({ engine: 'bing', query }, 'Trying Bing search (browser-based)');
+                    results = await searchBingAPI(query, searchOptions);
+                    break;
+                    
+                default:
+                    logger.warn({ engine }, 'Unknown search engine, skipping');
+                    continue;
+            }
+
+            if (results && results.length > 0) {
+                logger.info({ 
+                    engine, 
+                    resultCount: results.length,
+                    sites: results.map(r => r.siteName),
+                }, 'Search successful');
+                
+                return { 
+                    engine, 
+                    results,
+                    fallbackUsed: engine !== engines[0],
+                };
+            }
+            
+            logger.info({ engine }, 'No results from engine, trying next');
+            
+        } catch (err) {
+            errors.push({ engine, error: err.message });
+            logger.warn({ engine, error: err.message }, 'Search engine failed, trying next');
         }
-    } catch (err) {
-        logger.warn({ error: err.message }, 'DuckDuckGo search failed');
     }
-    
-    // Future: Add other search engine fallbacks here
-    return { engine: 'none', results: [] };
+
+    // All engines failed
+    logger.error({ 
+        productName, 
+        errors,
+        enginesAttempted: engines,
+    }, 'All search engines failed');
+
+    return { 
+        engine: 'none', 
+        results: [],
+        errors,
+    };
+}
+
+/**
+ * Get search engine status (which engines are available)
+ * All engines are FREE and use browser-based scraping (no API keys required)
+ */
+export function getSearchEngineStatus() {
+    return {
+        duckduckgo: {
+            enabled: true,
+            type: 'browser-scraping',
+            cost: 'FREE',
+            notes: 'Most reliable, uses HTML version with minimal bot detection',
+        },
+        google: {
+            enabled: true,
+            type: 'browser-scraping',
+            cost: 'FREE',
+            notes: 'May show CAPTCHA under heavy use - use as fallback',
+        },
+        bing: {
+            enabled: true,
+            type: 'browser-scraping',
+            cost: 'FREE',
+            notes: 'May show CAPTCHA under heavy use - use as fallback',
+        },
+        configuredOrder: SEARCH_CONFIG.engines,
+        allFree: true,
+        apiKeysRequired: false,
+    };
 }
 
 /**
@@ -528,9 +999,12 @@ export const searchBing = searchDuckDuckGo;
 
 export default {
     searchDuckDuckGo,
+    searchGoogle,
+    searchBingAPI,
     searchBing: searchDuckDuckGo,  // Alias for backward compatibility
     searchProduct,
     searchProductWithFallback,
     getKnownEcommerceDomains,
     addEcommerceDomain,
+    getSearchEngineStatus,
 };

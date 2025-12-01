@@ -119,25 +119,50 @@ const SITE_SELECTORS = {
     
     walmart: {
         title: [
+            // New Walmart layout (2024+)
+            "[data-testid='product-title'] h1",
             "h1[itemprop='name']",
+            "#main-title",
+            // Legacy selectors
             "h1.prod-ProductTitle",
             "[data-automation-id='product-title']",
+            "h1.lh-copy",
+            "h1.f3",
             "h1"
         ],
         price: [
+            // New price structure (2024+)
+            "[data-testid='price-wrap'] [itemprop='price']",
             "[itemprop='price']",
+            "span[data-testid='current-price']",
+            "[data-testid='product-price'] span.f1",
+            // Price with characteristic/mantissa pattern
             ".price-characteristic",
+            "span.price-group",
+            "[data-automation-id='product-price'] .f2",
             "[data-automation-id='product-price'] span",
+            // Fallbacks
+            ".price-main .visuallyhidden",
+            "[aria-label*='current price']",
             ".price-group"
         ],
         availability: [
+            // New fulfillment selectors
+            "[data-testid='fulfillment-badge']",
+            "[data-testid='shipping-tile']",
+            "[data-testid='pickup-tile']",
+            // Legacy
             ".prod-fulfillment-shipping-text",
             "[data-automation-id='fulfillment-shipping']",
-            ".fulfillment-shipping-text"
+            ".fulfillment-shipping-text",
+            "[data-testid='add-to-cart-section']"
         ],
         image: [
+            "[data-testid='hero-image-container'] img",
             "[data-automation-id='hero-image'] img",
-            ".hover-zoom-hero-image img"
+            ".hover-zoom-hero-image img",
+            "[data-testid='media-thumbnail'] img",
+            "img[data-testid='product-image']"
         ]
     },
     

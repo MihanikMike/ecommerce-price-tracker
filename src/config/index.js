@@ -40,6 +40,36 @@ const config = {
     useProxy: process.env.SCRAPER_USE_PROXY === 'true',
   },
   
+  // Search Engine Configuration
+  // All search engines are FREE and use browser-based scraping (no API keys needed)
+  search: {
+    // Search engine priority order (all use free browser-based scraping)
+    engines: (process.env.SEARCH_ENGINES || 'duckduckgo,google,bing').split(',').map(e => e.trim()),
+    
+    // Search behavior
+    maxResults: parseInt(process.env.SEARCH_MAX_RESULTS, 10) || 10,
+    timeout: parseInt(process.env.SEARCH_TIMEOUT, 10) || 30000,
+    retries: parseInt(process.env.SEARCH_RETRIES, 10) || 3,
+    
+    // Notes:
+    // - DuckDuckGo: Most reliable, uses HTML version with minimal bot detection
+    // - Google: May show CAPTCHA under heavy use - best as fallback
+    // - Bing: May show CAPTCHA under heavy use - best as fallback
+    // All engines use Playwright browser automation for scraping
+  },
+  
+  // Email Configuration (for price alerts)
+  email: {
+    enabled: process.env.EMAIL_ENABLED === 'true',
+    provider: process.env.EMAIL_PROVIDER || 'smtp', // smtp, gmail, sendgrid, ses, mailgun
+    from: process.env.EMAIL_FROM || 'price-tracker@localhost',
+    fromName: process.env.EMAIL_FROM_NAME || 'Price Tracker',
+    // Recipients for price alerts (comma-separated)
+    alertRecipients: process.env.PRICE_ALERT_EMAIL_RECIPIENTS 
+      ? process.env.PRICE_ALERT_EMAIL_RECIPIENTS.split(',').map(e => e.trim())
+      : [],
+  },
+  
   // Logging
   log: {
     level: process.env.LOG_LEVEL || 'info',
@@ -85,6 +115,25 @@ const config = {
     deleteBatchSize: parseInt(process.env.RETENTION_DELETE_BATCH_SIZE, 10) || 1000,
     // Keep daily price samples for historical analysis
     keepDailySamples: process.env.RETENTION_KEEP_DAILY_SAMPLES !== 'false',
+  },
+
+  // Cache Configuration (Redis)
+  cache: {
+    enabled: process.env.CACHE_ENABLED === 'true',
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.REDIS_DB, 10) || 0,
+    keyPrefix: process.env.REDIS_KEY_PREFIX || 'pt:',
+    // TTL settings (in seconds)
+    ttl: {
+      product: parseInt(process.env.CACHE_TTL_PRODUCT, 10) || 300,         // 5 minutes
+      productList: parseInt(process.env.CACHE_TTL_PRODUCT_LIST, 10) || 60, // 1 minute
+      priceHistory: parseInt(process.env.CACHE_TTL_PRICE_HISTORY, 10) || 120, // 2 minutes
+      chartData: parseInt(process.env.CACHE_TTL_CHART, 10) || 180,         // 3 minutes
+      searchResults: parseInt(process.env.CACHE_TTL_SEARCH, 10) || 600,    // 10 minutes
+      stats: parseInt(process.env.CACHE_TTL_STATS, 10) || 30,              // 30 seconds
+    },
   },
 };
 

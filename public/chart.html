@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price History Chart - E-Commerce Price Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        h1 {
+            color: #4fc3f7;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        h1 .icon {
+            font-size: 2rem;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        select, button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        select {
+            background: #2a2a4e;
+            color: #e0e0e0;
+            min-width: 150px;
+        }
+        
+        select:focus {
+            outline: 2px solid #4fc3f7;
+        }
+        
+        button {
+            background: #4fc3f7;
+            color: #1a1a2e;
+            font-weight: 600;
+        }
+        
+        button:hover {
+            background: #81d4fa;
+            transform: translateY(-1px);
+        }
+        
+        button.secondary {
+            background: #2a2a4e;
+            color: #e0e0e0;
+        }
+        
+        button.secondary:hover {
+            background: #3a3a6e;
+        }
+        
+        .product-info {
+            background: #2a2a4e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .product-title {
+            font-size: 1.2rem;
+            color: #fff;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+        
+        .product-meta {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+            color: #a0a0a0;
+        }
+        
+        .product-meta span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: #2a2a4e;
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #4fc3f7;
+        }
+        
+        .stat-value.positive {
+            color: #66bb6a;
+        }
+        
+        .stat-value.negative {
+            color: #ef5350;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: #a0a0a0;
+            margin-top: 5px;
+        }
+        
+        .chart-container {
+            background: #2a2a4e;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            height: 400px;
+        }
+        
+        .chart-container.comparison {
+            height: 500px;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #a0a0a0;
+        }
+        
+        .loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #3a3a6e;
+            border-top-color: #4fc3f7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: rgba(239, 83, 80, 0.1);
+            border: 1px solid #ef5350;
+            border-radius: 8px;
+            padding: 15px;
+            color: #ef5350;
+            text-align: center;
+        }
+        
+        .product-selector {
+            background: #2a2a4e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .product-selector h3 {
+            color: #4fc3f7;
+            margin-bottom: 15px;
+            font-size: 1rem;
+        }
+        
+        .product-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .product-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .product-item:hover {
+            background: #3a3a6e;
+        }
+        
+        .product-item.selected {
+            background: rgba(79, 195, 247, 0.2);
+            border: 1px solid #4fc3f7;
+        }
+        
+        .product-item input[type="checkbox"] {
+            margin-right: 10px;
+            width: 18px;
+            height: 18px;
+        }
+        
+        .product-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .product-item-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+        
+        .product-item-meta {
+            font-size: 0.75rem;
+            color: #a0a0a0;
+        }
+        
+        .product-item-price {
+            font-weight: 600;
+            color: #4fc3f7;
+            margin-left: 10px;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            border-radius: 8px 8px 0 0;
+            background: #2a2a4e;
+            color: #a0a0a0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tab.active {
+            background: #3a3a6e;
+            color: #4fc3f7;
+        }
+        
+        .tab:hover:not(.active) {
+            background: #333366;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 0.85rem;
+        }
+        
+        footer a {
+            color: #4fc3f7;
+            text-decoration: none;
+        }
+        
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            h1 {
+                font-size: 1.4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><span class="icon">📈</span> Price History Chart</h1>
+            <div class="controls">
+                <select id="rangeSelect">
+                    <option value="24h">Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d" selected>Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                    <option value="1y">Last Year</option>
+                    <option value="all">All Time</option>
+                </select>
+                <select id="chartType">
+                    <option value="line">Line Chart</option>
+                    <option value="daily">Daily Summary</option>
+                </select>
+                <button onclick="refreshChart()">🔄 Refresh</button>
+                <button class="secondary" onclick="toggleComparison()">📊 Compare</button>
+            </div>
+        </header>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="single" onclick="switchTab('single')">Single Product</div>
+            <div class="tab" data-tab="compare" onclick="switchTab('compare')">Compare Products</div>
+        </div>
+        
+        <div id="singleView">
+            <div class="product-info" id="productInfo">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading product info...
+                </div>
+            </div>
+            
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-value" id="currentPrice">--</div>
+                    <div class="stat-label">Current Price</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="minPrice">--</div>
+                    <div class="stat-label">Lowest Price</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="maxPrice">--</div>
+                    <div class="stat-label">Highest Price</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avgPrice">--</div>
+                    <div class="stat-label">Average Price</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="priceChange">--</div>
+                    <div class="stat-label">Price Change</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="dataPoints">--</div>
+                    <div class="stat-label">Data Points</div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="priceChart"></canvas>
+                <div class="loading" id="chartLoading">
+                    <div class="spinner"></div>
+                    Loading chart data...
+                </div>
+            </div>
+        </div>
+        
+        <div id="compareView" style="display: none;">
+            <div class="product-selector">
+                <h3>Select Products to Compare (up to 5)</h3>
+                <div class="product-list" id="productList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Loading products...
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chart-container comparison">
+                <canvas id="comparisonChart"></canvas>
+                <div class="loading" id="comparisonLoading" style="display: none;">
+                    <div class="spinner"></div>
+                    Loading comparison...
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            E-Commerce Price Tracker | <a href="/api/products">API</a> | Data updates automatically
+        </footer>
+    </div>
+    
+    <script>
+        // Configuration
+        const API_BASE = window.location.origin.replace(':3000', ':3001');
+        let priceChart = null;
+        let comparisonChart = null;
+        let currentProductId = null;
+        let selectedProducts = [];
+        let allProducts = [];
+        
+        // Get product ID from URL or default to 1
+        function getProductIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return parseInt(params.get('id')) || parseInt(params.get('productId')) || 1;
+        }
+        
+        // Format currency
+        function formatPrice(price, currency = 'USD') {
+            if (price === null || price === undefined) return '--';
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: currency,
+            }).format(price);
+        }
+        
+        // Format date
+        function formatDate(dateStr) {
+            return new Date(dateStr).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+            });
+        }
+        
+        // Load product info
+        async function loadProductInfo(productId) {
+            const container = document.getElementById('productInfo');
+            try {
+                const response = await fetch(`${API_BASE}/api/charts/product/${productId}/info`);
+                if (!response.ok) throw new Error('Product not found');
+                const data = await response.json();
+                
+                container.innerHTML = `
+                    <div class="product-title">${data.title}</div>
+                    <div class="product-meta">
+                        <span>🏪 ${data.site}</span>
+                        <span>📊 ${data.totalPrices} price records</span>
+                        <span>📅 Tracking since ${formatDate(data.firstPriceDate)}</span>
+                        <span><a href="${data.url}" target="_blank" style="color: #4fc3f7;">🔗 View Product</a></span>
+                    </div>
+                `;
+                
+                // Update all-time stats
+                if (data.allTimeLow !== null) {
+                    document.getElementById('minPrice').textContent = formatPrice(data.allTimeLow, data.currency);
+                }
+                if (data.allTimeHigh !== null) {
+                    document.getElementById('maxPrice').textContent = formatPrice(data.allTimeHigh, data.currency);
+                }
+                if (data.currentPrice !== null) {
+                    document.getElementById('currentPrice').textContent = formatPrice(data.currentPrice, data.currency);
+                }
+                
+                return data;
+            } catch (error) {
+                container.innerHTML = `<div class="error">Failed to load product info: ${error.message}</div>`;
+                throw error;
+            }
+        }
+        
+        // Load chart data
+        async function loadChartData(productId, range, chartType) {
+            const loadingEl = document.getElementById('chartLoading');
+            loadingEl.style.display = 'flex';
+            
+            try {
+                const endpoint = chartType === 'daily' 
+                    ? `${API_BASE}/api/charts/product/${productId}/daily?range=${range}`
+                    : `${API_BASE}/api/charts/product/${productId}?range=${range}`;
+                    
+                const response = await fetch(endpoint);
+                if (!response.ok) throw new Error('Failed to load chart data');
+                const data = await response.json();
+                
+                loadingEl.style.display = 'none';
+                return data;
+            } catch (error) {
+                loadingEl.style.display = 'none';
+                throw error;
+            }
+        }
+        
+        // Update stats from chart data
+        function updateStats(meta) {
+            if (meta.current !== undefined) {
+                document.getElementById('currentPrice').textContent = formatPrice(meta.current, meta.currency);
+            }
+            if (meta.min !== undefined) {
+                document.getElementById('minPrice').textContent = formatPrice(meta.min, meta.currency);
+            }
+            if (meta.max !== undefined) {
+                document.getElementById('maxPrice').textContent = formatPrice(meta.max, meta.currency);
+            }
+            if (meta.avg !== undefined) {
+                document.getElementById('avgPrice').textContent = formatPrice(meta.avg, meta.currency);
+            }
+            if (meta.changePercent !== undefined) {
+                const changeEl = document.getElementById('priceChange');
+                const change = meta.changePercent;
+                changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+                changeEl.className = 'stat-value ' + (change > 0 ? 'negative' : change < 0 ? 'positive' : '');
+            }
+            if (meta.dataPoints !== undefined) {
+                document.getElementById('dataPoints').textContent = meta.dataPoints.toLocaleString();
+            }
+        }
+        
+        // Render chart
+        function renderChart(data) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            if (priceChart) {
+                priceChart.destroy();
+            }
+            
+            const chartType = document.getElementById('chartType').value;
+            const isDaily = chartType === 'daily';
+            
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: data.datasets,
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index',
+                    },
+                    plugins: {
+                        legend: {
+                            display: isDaily,
+                            position: 'top',
+                            labels: {
+                                color: '#e0e0e0',
+                            },
+                        },
+                        tooltip: {
+                            backgroundColor: '#2a2a4e',
+                            titleColor: '#fff',
+                            bodyColor: '#e0e0e0',
+                            borderColor: '#4fc3f7',
+                            borderWidth: 1,
+                            callbacks: {
+                                title: function(context) {
+                                    const date = new Date(context[0].label);
+                                    return isDaily 
+                                        ? date.toLocaleDateString()
+                                        : date.toLocaleString();
+                                },
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${formatPrice(context.parsed.y, data.meta?.currency || 'USD')}`;
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: isDaily ? 'day' : 'hour',
+                                displayFormats: {
+                                    hour: 'MMM d, HH:mm',
+                                    day: 'MMM d',
+                                },
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)',
+                            },
+                            ticks: {
+                                color: '#a0a0a0',
+                            },
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)',
+                            },
+                            ticks: {
+                                color: '#a0a0a0',
+                                callback: function(value) {
+                                    return formatPrice(value, data.meta?.currency || 'USD');
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            
+            if (data.meta) {
+                updateStats(data.meta);
+            }
+        }
+        
+        // Refresh chart
+        async function refreshChart() {
+            const range = document.getElementById('rangeSelect').value;
+            const chartType = document.getElementById('chartType').value;
+            
+            try {
+                const data = await loadChartData(currentProductId, range, chartType);
+                renderChart(data);
+            } catch (error) {
+                console.error('Failed to refresh chart:', error);
+            }
+        }
+        
+        // Load all products for comparison
+        async function loadProducts() {
+            try {
+                const response = await fetch(`${API_BASE}/api/charts/products`);
+                if (!response.ok) throw new Error('Failed to load products');
+                allProducts = await response.json();
+                renderProductList();
+            } catch (error) {
+                document.getElementById('productList').innerHTML = 
+                    `<div class="error">Failed to load products: ${error.message}</div>`;
+            }
+        }
+        
+        // Render product list for comparison
+        function renderProductList() {
+            const container = document.getElementById('productList');
+            
+            if (allProducts.length === 0) {
+                container.innerHTML = '<div class="error">No products with price history found.</div>';
+                return;
+            }
+            
+            container.innerHTML = allProducts.map(product => `
+                <div class="product-item ${selectedProducts.includes(product.id) ? 'selected' : ''}" 
+                     onclick="toggleProduct(${product.id})">
+                    <input type="checkbox" ${selectedProducts.includes(product.id) ? 'checked' : ''} 
+                           onclick="event.stopPropagation(); toggleProduct(${product.id})">
+                    <div class="product-item-info">
+                        <div class="product-item-title">${product.title}</div>
+                        <div class="product-item-meta">${product.site} • ${product.priceCount} prices</div>
+                    </div>
+                    <div class="product-item-price">${formatPrice(product.currentPrice, product.currency)}</div>
+                </div>
+            `).join('');
+        }
+        
+        // Toggle product selection for comparison
+        function toggleProduct(productId) {
+            const index = selectedProducts.indexOf(productId);
+            if (index > -1) {
+                selectedProducts.splice(index, 1);
+            } else if (selectedProducts.length < 5) {
+                selectedProducts.push(productId);
+            } else {
+                alert('You can compare up to 5 products');
+                return;
+            }
+            renderProductList();
+            if (selectedProducts.length > 0) {
+                loadComparisonChart();
+            }
+        }
+        
+        // Load comparison chart
+        async function loadComparisonChart() {
+            if (selectedProducts.length === 0) return;
+            
+            const loadingEl = document.getElementById('comparisonLoading');
+            loadingEl.style.display = 'flex';
+            
+            const range = document.getElementById('rangeSelect').value;
+            
+            try {
+                const response = await fetch(
+                    `${API_BASE}/api/charts/compare?ids=${selectedProducts.join(',')}&range=${range}`
+                );
+                if (!response.ok) throw new Error('Failed to load comparison');
+                const data = await response.json();
+                
+                renderComparisonChart(data);
+            } catch (error) {
+                console.error('Failed to load comparison:', error);
+            } finally {
+                loadingEl.style.display = 'none';
+            }
+        }
+        
+        // Render comparison chart
+        function renderComparisonChart(data) {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+            
+            comparisonChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: data.datasets,
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index',
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#e0e0e0',
+                                boxWidth: 12,
+                                padding: 15,
+                            },
+                        },
+                        tooltip: {
+                            backgroundColor: '#2a2a4e',
+                            titleColor: '#fff',
+                            bodyColor: '#e0e0e0',
+                            borderColor: '#4fc3f7',
+                            borderWidth: 1,
+                        },
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)',
+                            },
+                            ticks: {
+                                color: '#a0a0a0',
+                            },
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)',
+                            },
+                            ticks: {
+                                color: '#a0a0a0',
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        }
+        
+        // Switch tabs
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+            
+            if (tab === 'single') {
+                document.getElementById('singleView').style.display = 'block';
+                document.getElementById('compareView').style.display = 'none';
+            } else {
+                document.getElementById('singleView').style.display = 'none';
+                document.getElementById('compareView').style.display = 'block';
+                if (allProducts.length === 0) {
+                    loadProducts();
+                }
+            }
+        }
+        
+        // Toggle comparison mode
+        function toggleComparison() {
+            switchTab('compare');
+        }
+        
+        // Event listeners
+        document.getElementById('rangeSelect').addEventListener('change', () => {
+            refreshChart();
+            if (selectedProducts.length > 0) {
+                loadComparisonChart();
+            }
+        });
+        
+        document.getElementById('chartType').addEventListener('change', refreshChart);
+        
+        // Initialize
+        async function init() {
+            currentProductId = getProductIdFromUrl();
+            
+            try {
+                await loadProductInfo(currentProductId);
+                await refreshChart();
+            } catch (error) {
+                console.error('Failed to initialize:', error);
+                document.getElementById('productInfo').innerHTML = `
+                    <div class="error">
+                        Product not found. <a href="?id=1" style="color: #4fc3f7;">Try product #1</a> or 
+                        <a href="/api/products" style="color: #4fc3f7;">view all products</a>.
+                    </div>
+                `;
+            }
+        }
+        
+        init();
+    </script>
+</body>
+</html>

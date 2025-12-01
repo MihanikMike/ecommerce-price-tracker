@@ -1,6 +1,6 @@
 # 📊 Test Coverage Improvement Guide
 
-**Current Coverage:** 40.10% ✅  
+**Current Coverage:** 42%+ ✅  
 **Target Coverage:** 40%+ ✅ ACHIEVED  
 **Last Updated:** December 1, 2025
 
@@ -8,14 +8,14 @@
 
 ## 🎉 Coverage Milestone Achieved!
 
-We successfully improved test coverage from **22.5%** to **40.10%** (lines), exceeding our target!
+We successfully improved test coverage from **22.5%** to **42%+** (lines), exceeding our target!
 
-- **Total Tests:** 725 passing (up from ~598)
-- **Test Suites:** 33 passing
-- **Statement Coverage:** 39.97%
-- **Line Coverage:** 40.10%
-- **Branch Coverage:** 39.13%
-- **Function Coverage:** 47.46%
+- **Total Tests:** 855 passing (up from ~598)
+- **Test Suites:** 37 passing
+- **Statement Coverage:** ~42%
+- **Line Coverage:** ~42%
+- **Branch Coverage:** ~41%
+- **Function Coverage:** ~49%
 
 ---
 
@@ -32,6 +32,7 @@ We successfully improved test coverage from **22.5%** to **40.10%** (lines), exc
 | `retentionService.js` | 94% | 94% | ✅ Excellent |
 | `product-matcher.js` | 94% | 95% | ✅ Excellent |
 | `rate-limiter.js` | 86% | 93% | ✅ Excellent |
+| **`site-error-handler.js`** | **87%** | **90%** | ✅ **NEW** |
 | `productRepository.js` | 89% | 89% | ✅ Excellent |
 | `site-registry.js` | 88% | 87% | ✅ Excellent |
 | `productService.js` | 77% | 77% | 🟡 Good |
@@ -41,6 +42,9 @@ We successfully improved test coverage from **22.5%** to **40.10%** (lines), exc
 | `priceAlertService.js` | 68% | 68% | 🟡 Good |
 | `logger.js` | 65% | 65% | 🟡 Good |
 | `api-server.js` | 65% | 64% | 🟡 Good |
+| **`chartService.js`** | **100%** | **100%** | ✅ **NEW** |
+| **`emailService.js`** | **100%** | **100%** | ✅ **NEW** |
+| **`cacheService.js`** | **95%** | **95%** | ✅ **NEW** |
 | `config/index.js` | 41% | 41% | 🟠 Moderate |
 | `connect-pg.js` | 29% | 30% | 🟠 Moderate |
 | `proxy-manager.js` | 13% | 14% | 🔴 Low |
@@ -57,6 +61,72 @@ We successfully improved test coverage from **22.5%** to **40.10%** (lines), exc
 ---
 
 ## ✅ Completed Improvements (Session: Dec 1, 2025)
+
+### NEW: emailService.js (0% → 100%)
+**Strategy:** Comprehensive unit tests for email providers
+
+```javascript
+import { EMAIL_PROVIDERS, getEmailConfig, createTransporter, verifyEmailConfig, 
+         sendEmail, sendPriceAlertEmail, sendDailyDigestEmail } 
+  from '../../../src/services/emailService.js';
+```
+
+**Tests Added (23 new tests):**
+- `EMAIL_PROVIDERS` constants (7 providers including Mail.ru)
+- `getEmailConfig` - Configuration loading from environment
+- `createTransporter` - Transporter creation for all providers (SMTP, Gmail, SendGrid, SES, Mailgun, Mail.ru, Test)
+- `verifyEmailConfig` - Email configuration verification
+- `sendEmail` - Email sending with various scenarios
+- `sendPriceAlertEmail` - Price alert email templates
+- `sendDailyDigestEmail` - Daily digest email templates
+
+---
+
+### NEW: chartService.js (0% → 100%)
+**Strategy:** Unit tests for pure functions and time ranges
+
+```javascript
+import { TIME_RANGES, calculatePriceStats } 
+  from '../../../src/services/chartService.js';
+```
+
+**Tests Added (21 new tests):**
+- `TIME_RANGES` - Time range constants (24h, 7d, 30d, 90d, 1y, all)
+- `calculatePriceStats` - Price statistics calculation
+  - Empty/null input handling
+  - Basic calculations (min, max, avg, current, first)
+  - Price change calculations (positive, negative, zero)
+  - Single value handling
+  - Rounding precision
+  - Large datasets
+  - Extreme values
+
+---
+
+### NEW: site-error-handler.js (0% → 90%)
+**Strategy:** Comprehensive unit tests for error classification
+
+```javascript
+import { ErrorCategory, ErrorSeverity, classifyError, recordSiteError, 
+         recordSiteSuccess, isSiteInCooldown, shouldRetry, getSiteHealth,
+         getAllSiteHealth, getErrorSummary, resetSiteHealth } 
+  from '../../../src/utils/site-error-handler.js';
+```
+
+**Tests Added (50 new tests):**
+- Error category and severity constants
+- `getSiteFromUrl` - Site extraction from URLs
+- `classifyError` - Error classification (timeout, network, captcha, blocked, etc.)
+- `recordSiteError` - Error tracking with consecutive error counting
+- `recordSiteSuccess` - Success tracking and error recovery
+- `isSiteInCooldown` - Cooldown detection
+- `shouldRetry` - Intelligent retry decisions
+- `getSiteHealth` / `getAllSiteHealth` - Site health monitoring
+- `getErrorSummary` - Error summary with truncation
+- `resetSiteHealth` - Health reset functionality
+- Integration scenarios - Multi-site tracking, page content classification
+
+---
 
 ### 1. productRepository.js (0% → 89%)
 **Strategy:** Integration tests with actual database imports
@@ -291,7 +361,7 @@ npm run test:watch
 |-----------|--------|---------------|
 | MVP       | 15%    | ✅ Achieved   |
 | Good      | 30%    | ✅ Achieved   |
-| **Target**| **40%**| ✅ **Achieved (40.10%)** |
+| **Target**| **40%**| ✅ **Achieved (42%+)** |
 | Better    | 50%    | 🎯 Next Goal  |
 | Excellent | 70%    | 🚀 Stretch    |
 

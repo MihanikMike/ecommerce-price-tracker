@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import {
   getKnownEcommerceDomains,
   addEcommerceDomain,
+  getSearchEngineStatus,
 } from '../../../src/search/search-engine.js';
 
 /**
@@ -152,6 +153,64 @@ describe('search-engine', () => {
         expect(domain.priority).toBeGreaterThanOrEqual(1);
         expect(domain.priority).toBeLessThanOrEqual(10);
       });
+    });
+  });
+
+  describe('getSearchEngineStatus', () => {
+    it('should return status for all search engines', () => {
+      const status = getSearchEngineStatus();
+      
+      expect(status).toBeDefined();
+      expect(status.duckduckgo).toBeDefined();
+      expect(status.google).toBeDefined();
+      expect(status.bing).toBeDefined();
+    });
+
+    it('should have all engines as free browser-scraping', () => {
+      const status = getSearchEngineStatus();
+      
+      expect(status.duckduckgo.enabled).toBe(true);
+      expect(status.duckduckgo.type).toBe('browser-scraping');
+      expect(status.duckduckgo.cost).toBe('FREE');
+      
+      expect(status.google.enabled).toBe(true);
+      expect(status.google.type).toBe('browser-scraping');
+      expect(status.google.cost).toBe('FREE');
+      
+      expect(status.bing.enabled).toBe(true);
+      expect(status.bing.type).toBe('browser-scraping');
+      expect(status.bing.cost).toBe('FREE');
+    });
+
+    it('should indicate no API keys required', () => {
+      const status = getSearchEngineStatus();
+      
+      expect(status.allFree).toBe(true);
+      expect(status.apiKeysRequired).toBe(false);
+    });
+
+    it('should include notes for each engine', () => {
+      const status = getSearchEngineStatus();
+      
+      expect(status.duckduckgo.notes).toBeDefined();
+      expect(status.google.notes).toBeDefined();
+      expect(status.bing.notes).toBeDefined();
+    });
+
+    it('should include configured engine order', () => {
+      const status = getSearchEngineStatus();
+      
+      expect(Array.isArray(status.configuredOrder)).toBe(true);
+      expect(status.configuredOrder.length).toBeGreaterThan(0);
+    });
+
+    it('should have duckduckgo in default engine order', () => {
+      const status = getSearchEngineStatus();
+      
+      const hasDuckDuckGo = status.configuredOrder.some(
+        engine => engine.toLowerCase() === 'duckduckgo' || engine.toLowerCase() === 'ddg'
+      );
+      expect(hasDuckDuckGo).toBe(true);
     });
   });
 });

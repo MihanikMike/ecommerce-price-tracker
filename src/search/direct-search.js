@@ -60,21 +60,45 @@ const SITE_SEARCH_CONFIGS = {
         priority: 9,
     },
     
-    // Walmart
+    // Walmart - Updated selectors for 2024+ layout
     walmart: {
         name: 'Walmart',
         domain: 'walmart.com',
         searchUrl: (query) => `https://www.walmart.com/search?q=${encodeURIComponent(query)}`,
-        resultSelector: '[data-testid="list-view"]',
+        // Multiple result container selectors for different layouts
+        resultSelector: '[data-testid="list-view"], [data-item-id], div[data-automation-id="product-item"]',
         extractProduct: async (element) => {
-            const titleEl = await element.$('[data-automation-id="product-title"]');
-            const priceEl = await element.$('[data-automation-id="product-price"] .f2');
-            const linkEl = await element.$('a[link-identifier]');
+            // Try multiple title selectors
+            let titleEl = await element.$('[data-automation-id="product-title"]');
+            if (!titleEl) titleEl = await element.$('span[data-automation-id="product-title"]');
+            if (!titleEl) titleEl = await element.$('[data-testid="product-title"]');
+            if (!titleEl) titleEl = await element.$('a[link-identifier] span');
+            if (!titleEl) titleEl = await element.$('.w_iUH7');
+            
+            // Try multiple price selectors
+            let priceEl = await element.$('[data-automation-id="product-price"] .f2');
+            if (!priceEl) priceEl = await element.$('[data-automation-id="product-price"] span.w_iUH7');
+            if (!priceEl) priceEl = await element.$('[data-testid="current-price"]');
+            if (!priceEl) priceEl = await element.$('[itemprop="price"]');
+            if (!priceEl) priceEl = await element.$('span[aria-hidden="true"]');
+            if (!priceEl) priceEl = await element.$('.price-main');
+            
+            // Try multiple link selectors
+            let linkEl = await element.$('a[link-identifier]');
+            if (!linkEl) linkEl = await element.$('a[href*="/ip/"]');
+            if (!linkEl) linkEl = await element.$('a[data-testid="product-link"]');
+            if (!linkEl) linkEl = await element.$('a');
+            
+            // Get URL and ensure full path
+            let url = linkEl ? await linkEl.getAttribute('href') : null;
+            if (url && !url.startsWith('http')) {
+                url = `https://www.walmart.com${url}`;
+            }
             
             return {
                 title: titleEl ? await titleEl.textContent() : null,
                 price: priceEl ? await priceEl.textContent() : null,
-                url: linkEl ? await linkEl.getAttribute('href') : null,
+                url: url,
             };
         },
         priority: 9,

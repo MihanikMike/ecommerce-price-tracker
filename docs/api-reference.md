@@ -582,6 +582,360 @@ Returns current (non-sensitive) configuration.
 
 ---
 
+## Charts API
+
+Interactive price history charts with Chart.js-compatible data.
+
+### List Products for Charts
+
+```http
+GET /api/charts/products
+```
+
+Returns products that have price history available for charting.
+
+**Example Request:**
+```bash
+curl http://localhost:3001/api/charts/products
+```
+
+**Example Response:**
+```json
+{
+  "products": [
+    {
+      "id": 1,
+      "title": "Apple AirPods Pro 3",
+      "site": "Amazon",
+      "price_count": 15,
+      "latest_price": "219.99",
+      "currency": "USD"
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+### Get Chart Data
+
+```http
+GET /api/charts/product/:id
+```
+
+Returns Chart.js-formatted price data for a product.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | number | Product ID |
+
+**Query Parameters:**
+| Parameter | Type | Default | Options | Description |
+|-----------|------|---------|---------|-------------|
+| `range` | string | `30d` | `24h`, `7d`, `30d`, `90d`, `1y`, `all` | Time range |
+
+**Example Request:**
+```bash
+curl "http://localhost:3001/api/charts/product/1?range=30d"
+```
+
+**Example Response:**
+```json
+{
+  "productId": 1,
+  "range": "30d",
+  "labels": ["2025-11-01", "2025-11-15", "2025-11-29"],
+  "datasets": [
+    {
+      "label": "Price (USD)",
+      "data": [249.99, 234.99, 219.99],
+      "borderColor": "#4F46E5",
+      "fill": false
+    }
+  ],
+  "stats": {
+    "min": 219.99,
+    "max": 249.99,
+    "avg": 234.99,
+    "current": 219.99,
+    "change": -12.0
+  }
+}
+```
+
+---
+
+### Get Product Info for Chart Header
+
+```http
+GET /api/charts/product/:id/info
+```
+
+Returns product metadata for chart headers/titles.
+
+**Example Request:**
+```bash
+curl http://localhost:3001/api/charts/product/1/info
+```
+
+**Example Response:**
+```json
+{
+  "id": 1,
+  "title": "Apple AirPods Pro 3",
+  "site": "Amazon",
+  "url": "https://www.amazon.com/dp/B0ABC123",
+  "latest_price": "219.99",
+  "currency": "USD",
+  "price_count": 15
+}
+```
+
+---
+
+### Get Daily Aggregated Chart Data
+
+```http
+GET /api/charts/product/:id/daily
+```
+
+Returns daily aggregated price data (min, max, avg per day).
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `range` | string | `90d` | Time range |
+
+**Example Request:**
+```bash
+curl "http://localhost:3001/api/charts/product/1/daily?range=90d"
+```
+
+**Example Response:**
+```json
+{
+  "productId": 1,
+  "range": "90d",
+  "labels": ["2025-09-01", "2025-09-02", "..."],
+  "datasets": [
+    {
+      "label": "Daily Average",
+      "data": [249.99, 249.99, "..."],
+      "borderColor": "#4F46E5"
+    },
+    {
+      "label": "Daily Min",
+      "data": [249.99, 245.99, "..."],
+      "borderColor": "#10B981"
+    },
+    {
+      "label": "Daily Max",
+      "data": [249.99, 252.99, "..."],
+      "borderColor": "#EF4444"
+    }
+  ]
+}
+```
+
+---
+
+### Compare Multiple Products
+
+```http
+GET /api/charts/compare
+```
+
+Returns chart data comparing multiple products.
+
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `ids` | string | Yes | Comma-separated product IDs (max 10) |
+| `range` | string | No | Time range (default: `30d`) |
+
+**Example Request:**
+```bash
+curl "http://localhost:3001/api/charts/compare?ids=1,2,3&range=30d"
+```
+
+**Example Response:**
+```json
+{
+  "range": "30d",
+  "labels": ["2025-11-01", "2025-11-15", "2025-11-29"],
+  "datasets": [
+    {
+      "label": "Apple AirPods Pro 3",
+      "data": [249.99, 234.99, 219.99],
+      "borderColor": "#4F46E5"
+    },
+    {
+      "label": "Sony WF-1000XM5",
+      "data": [279.99, 269.99, 259.99],
+      "borderColor": "#10B981"
+    }
+  ],
+  "products": [
+    { "id": 1, "title": "Apple AirPods Pro 3" },
+    { "id": 2, "title": "Sony WF-1000XM5" }
+  ]
+}
+```
+
+---
+
+### Chart UI
+
+Access the interactive chart interface directly:
+
+```
+http://localhost:3001/chart.html?id=1
+```
+
+**Features:**
+- Interactive Chart.js visualization
+- Time range selector (24h, 7d, 30d, 90d, 1y, all)
+- Product comparison mode (up to 5 products)
+- Statistics cards (current, min, max, avg, change)
+- Dark theme UI
+
+---
+
+## Cache API
+
+Redis-based caching for improved API performance.
+
+> **Note:** Cache is optional. Set `CACHE_ENABLED=true` in your environment to enable.
+
+### Get Cache Statistics
+
+```http
+GET /api/cache/stats
+```
+
+Returns cache statistics and connection status.
+
+**Example Request:**
+```bash
+curl http://localhost:3001/api/cache/stats
+```
+
+**Example Response:**
+```json
+{
+  "enabled": true,
+  "connected": true,
+  "keyCount": 45,
+  "memoryUsed": "2.5MB",
+  "hits": 1250,
+  "misses": 150,
+  "hitRate": "89.29%",
+  "uptime": 86400
+}
+```
+
+**Response when disabled:**
+```json
+{
+  "enabled": false,
+  "connected": false,
+  "message": "Cache is disabled. Set CACHE_ENABLED=true to enable."
+}
+```
+
+---
+
+### Clear All Cache
+
+```http
+DELETE /api/cache
+```
+
+Clears all cached data.
+
+**Example Request:**
+```bash
+curl -X DELETE http://localhost:3001/api/cache
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "message": "Cache cleared"
+}
+```
+
+---
+
+### Clear Product Cache
+
+```http
+DELETE /api/cache/product/:id
+```
+
+Clears cached data for a specific product.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | number | Product ID |
+
+**Example Request:**
+```bash
+curl -X DELETE http://localhost:3001/api/cache/product/1
+```
+
+**Example Response:**
+```json
+{
+  "success": true,
+  "productId": 1,
+  "message": "Product cache cleared"
+}
+```
+
+---
+
+### Cache Configuration
+
+```env
+# Enable caching (optional - defaults to false)
+CACHE_ENABLED=true
+
+# Redis connection
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=            # Optional
+REDIS_DB=0                 # Optional
+
+# TTL settings (seconds)
+CACHE_TTL_PRODUCT=300          # 5 minutes
+CACHE_TTL_PRODUCT_LIST=60      # 1 minute
+CACHE_TTL_PRICE_HISTORY=120    # 2 minutes
+CACHE_TTL_CHART=180            # 3 minutes
+CACHE_TTL_SEARCH=600           # 10 minutes
+CACHE_TTL_STATS=30             # 30 seconds
+```
+
+### Cached Endpoints
+
+The following endpoints use caching when enabled:
+
+| Endpoint | TTL | Description |
+|----------|-----|-------------|
+| `GET /api/products/:id` | 5 min | Single product data |
+| `GET /api/products/:id/history` | 10 min | Price history |
+| `GET /api/charts/product/:id` | 3 min | Chart data |
+| `GET /api/charts/product/:id/daily` | 3 min | Daily chart data |
+| `GET /api/stats` | 5 min | Database statistics |
+
+Cached responses include a `fromCache: true` field when served from cache.
+
+---
+
 ## Search API
 
 ### Search for Products
@@ -742,6 +1096,22 @@ print(changes.json())
 ---
 
 ## Changelog
+
+### v1.2.0 (December 1, 2025)
+- **Cache API** - Redis-based caching layer for performance
+  - `GET /api/cache/stats` - Cache statistics
+  - `DELETE /api/cache` - Clear all cache
+  - `DELETE /api/cache/product/:id` - Clear product cache
+- Cached responses include `fromCache: true` indicator
+
+### v1.1.0 (December 1, 2025)
+- **Charts API** - Interactive price history visualization
+  - `GET /api/charts/products` - List chartable products
+  - `GET /api/charts/product/:id` - Get Chart.js data
+  - `GET /api/charts/product/:id/info` - Product info for charts
+  - `GET /api/charts/product/:id/daily` - Daily aggregated data
+  - `GET /api/charts/compare` - Compare multiple products
+- Added `/chart.html` interactive chart UI
 
 ### v1.0.0 (November 29, 2025)
 - Initial API release

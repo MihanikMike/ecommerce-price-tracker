@@ -4,6 +4,7 @@
 # Services:
 #   - app: Main price tracker application
 #   - postgres: PostgreSQL database
+#   - redis: Redis cache (optional)
 #   - prometheus: Metrics collection
 #   - grafana: Visualization dashboards
 # =============================================================================
@@ -31,6 +32,10 @@ services:
       - SCRAPER_USE_PROXY=${SCRAPER_USE_PROXY:-false}
       - SCRAPER_HEADLESS=true
       - SCRAPER_TIMEOUT=30000
+      # Cache configuration (optional)
+      - CACHE_ENABLED=${CACHE_ENABLED:-false}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "3000:3000"
     volumes:
@@ -102,6 +107,28 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # ===========================================
+  # CACHE (Optional)
+  # ===========================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: price-tracker-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # Grafana - Visualization
   grafana:
     image: grafana/grafana:latest
@@ -125,6 +152,7 @@ volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
+  redis_data:
 
 networks:
   app-network:
