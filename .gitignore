@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Database
+*.sql.backup
+*.db
+
+# Output
+exports/
+products.json
+proxy_cache.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Playwright
+playwright/.auth/
+test-results/
+playwright-report/
+
+# Build
+dist/
+build/
+
+# Misc
+.cache/
+temp/
+tmp/
+
+# Database backups
+backups/
+
+# Application logs
+logs/
