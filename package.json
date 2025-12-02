@@ -55,6 +55,12 @@
     "chart:stats": "node src/cli/charts.js stats",
     "chart:compare": "node src/cli/charts.js compare",
     "chart:help": "node src/cli/charts.js help",
+    "cache": "node src/cli/cache.js",
+    "cache:status": "node src/cli/cache.js status",
+    "cache:clear": "node src/cli/cache.js clear",
+    "cache:test": "node src/cli/cache.js test",
+    "monitor": "node src/monitor/price-monitor.js",
+    "monitor:search": "node src/monitor/search-monitor.js",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "format": "prettier --write \"src/**/*.js\""

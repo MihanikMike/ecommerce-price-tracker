@@ -27,6 +27,7 @@ const getArg = (name) => {
 
 const port = parseInt(getArg('port'), 10) || parseInt(process.env.API_PORT, 10) || 3001;
 const healthPort = parseInt(getArg('health-port'), 10) || parseInt(process.env.HEALTH_PORT, 10) || 3000;
+const noBrowser = args.includes('--no-browser') || args.includes('--light') || process.env.API_NO_BROWSER === 'true';
 
 // Help
 if (args.includes('--help') || args.includes('-h') || args.includes('help')) {
@@ -39,11 +40,14 @@ Usage:
 Options:
   --port=PORT         API server port (default: 3001, env: API_PORT)
   --health-port=PORT  Health server port (default: 3000, env: HEALTH_PORT)
+  --no-browser        Skip browser pool (saves ~500MB RAM, disables /api/search)
+  --light             Same as --no-browser
   --help, -h          Show this help message
 
 Environment Variables:
   API_PORT            API server port
   HEALTH_PORT         Health server port
+  API_NO_BROWSER      Set to 'true' to skip browser pool
   PG_*                PostgreSQL connection settings
 
 Examples:
@@ -52,6 +56,10 @@ Examples:
 
   # Start on custom port
   node src/cli/api.js --port=8080
+
+  # Lightweight mode (no browser pool, saves ~500MB RAM)
+  node src/cli/api.js --no-browser
+  npm run api:light
 
   # Using npm script
   npm run api
@@ -96,7 +104,9 @@ async function shutdown(signal) {
     try {
         await stopApiServer();
         await stopHealthServer();
-        await browserPool.closeAll();
+        if (!noBrowser) {
+            await browserPool.closeAll();
+        }
         await closeDatabaseConnection();
         logger.info('API server shutdown complete');
         process.exit(0);
@@ -139,9 +149,13 @@ async function main() {
         await runMigrations();
         logger.info('Migrations completed');
 
-        // Initialize browser pool (needed for search endpoint)
-        await browserPool.initialize();
-        logger.info('Browser pool initialized');
+        // Initialize browser pool only if not in light mode (needed for search endpoint)
+        if (!noBrowser) {
+            await browserPool.initialize();
+            logger.info('Browser pool initialized');
+        } else {
+            logger.info('Browser pool skipped (--no-browser mode, /api/search disabled)');
+        }
 
         // Start health server
         const actualHealthPort = await startHealthServer(healthPort);

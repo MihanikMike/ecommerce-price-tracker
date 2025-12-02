@@ -1141,8 +1141,27 @@ React/Vue interface (Future enhancement)
 ### 💡 LOW-005: Add Caching Layer
 Redis for performance (Future enhancement)
 
-### 💡 LOW-005: Add GraphQL API
+### 💡 LOW-006: Add GraphQL API
 Alternative to REST
+
+### 💡 LOW-007: Set Up Cron Job for Automatic Monitoring
+**Status:** 🔲 Not Started
+**Priority:** Medium
+**Description:** Configure a Linux cron job to automatically run `npm run monitor` at regular intervals (e.g., every hour) so price tracking happens automatically without manual intervention.
+
+**Implementation:**
+```bash
+# Edit crontab
+crontab -e
+
+# Add line to run every hour:
+0 * * * * cd /home/mike/VSCode_Projects/ecommerce-price-tracker && npm run monitor >> /var/log/price-monitor.log 2>&1
+```
+
+**Alternatives:**
+- Systemd timer for better logging/management
+- PM2 with cron-style scheduling
+- Docker with restart policy
 
 ---
 

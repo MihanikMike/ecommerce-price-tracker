@@ -1,4 +1,5 @@
 import logger from "../utils/logger.js";
+import { delay } from "../utils/delay.js";
 import { scrapeAmazon } from "../scraper/amazon.js";
 import { scrapeBurton } from "../scraper/burton.js";
 import { upsertProductAndHistory, getAllProductsWithLatestPrice } from "../db/productRepository.js";
@@ -17,6 +18,7 @@ import {
     getErrorSummary,
     getAllSiteHealth,
 } from "../utils/site-error-handler.js";
+import { browserPool } from "../utils/BrowserPool.js";
 import config from "../config/index.js";
 
 /**
@@ -228,7 +230,11 @@ export async function runPriceMonitor() {
             await delay(delayMs);
             
         } catch (error) {
-            logger.error({ error, url: trackedProduct.url }, 'Unexpected error processing product');
+            logger.error({ 
+                error: error.message || String(error),
+                stack: error.stack,
+                url: trackedProduct.url 
+            }, 'Unexpected error processing product');
             results.failed++;
             consecutiveFailures++;
             
@@ -267,4 +273,28 @@ export async function runPriceMonitor() {
     logger.info({ results, durationMs: duration }, 'Price monitoring cycle completed');
 
     return results;
+}
+
+// Run if called directly
+if (process.argv[1] && process.argv[1].includes('price-monitor.js')) {
+    (async () => {
+        try {
+            // Initialize browser pool
+            logger.info('Initializing browser pool...');
+            await browserPool.initialize();
+            logger.info('Browser pool ready');
+            
+            // Run monitor
+            const results = await runPriceMonitor();
+            logger.info({ results }, 'Price monitor completed');
+            
+            // Cleanup
+            await browserPool.closeAll();
+            process.exit(0);
+        } catch (error) {
+            logger.error({ error }, 'Price monitor failed');
+            await browserPool.closeAll();
+            process.exit(1);
+        }
+    })();
 }

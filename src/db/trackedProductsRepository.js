@@ -13,6 +13,8 @@ export async function getProductsToCheck(limit = 100) {
             SELECT id, url, site, check_interval_minutes, last_checked_at
             FROM tracked_products 
             WHERE enabled = true 
+            AND url IS NOT NULL
+            AND tracking_mode = 'url'
             AND (next_check_at IS NULL OR next_check_at <= NOW())
             ORDER BY last_checked_at ASC NULLS FIRST
             LIMIT $1

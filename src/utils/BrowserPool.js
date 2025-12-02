@@ -220,4 +220,6 @@ class BrowserPool {
     }
 }
 
-export const browserPool = new BrowserPool(3);
+// Pool size from environment variable (default: 3 browsers for parallel scraping)
+const poolSize = parseInt(process.env.BROWSER_POOL_SIZE, 10) || 3;
+export const browserPool = new BrowserPool(poolSize);

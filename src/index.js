@@ -1,9 +1,6 @@
 import logger from './utils/logger.js';
 import config, { validateConfigOrExit } from './config/index.js';
 import { pool, runMigrations, closeDatabaseConnection, checkDatabaseHealth } from './db/connect-pg.js';
-import { browserPool } from './utils/BrowserPool.js';
-import { runPriceMonitor } from './monitor/price-monitor.js';
-import { runSearchMonitor } from './monitor/search-monitor.js';
 import { testDatabaseConnection } from './utils/db-retry.js';
 import { startHealthServer, stopHealthServer, updateAppState } from './server/health-server.js';
 import { startApiServer, stopApiServer } from './server/api-server.js';
@@ -28,10 +25,6 @@ async function shutdown(signal) {
         // Stop health server
         await stopHealthServer();
         logger.info('Health server stopped');
-
-        // Close browser pool
-        await browserPool.closeAll();
-        logger.info('Browser pool closed');
 
         // Close database connections
         await closeDatabaseConnection();
@@ -98,10 +91,9 @@ async function main() {
         await runMigrations();
         logger.info('Migrations completed');
 
-        // Initialize browser pool
-        logger.info('Initializing browser pool...');
-        await browserPool.initialize();
-        logger.info('Browser pool initialized');
+        // NOTE: Browser pool is NOT initialized here
+        // Browsers are only started when running `npm run monitor`
+        // This keeps the API server lightweight (~50MB vs ~500MB)
 
         // Start health check server
         const healthPort = await startHealthServer(process.env.HEALTH_PORT || 3000);
@@ -114,43 +106,23 @@ async function main() {
         // Mark application as ready
         updateAppState({ isReady: true });
 
-        // Start monitoring
-        logger.info('Starting price monitoring...');
-        
-        // Run URL-based monitoring (existing products with direct URLs)
-        logger.info('Running URL-based price monitoring...');
-        const urlResults = await runPriceMonitor();
-        logger.info({ 
-            total: urlResults.total, 
-            successful: urlResults.successful, 
-            failed: urlResults.failed 
-        }, 'URL-based monitoring completed');
-        
-        // Run search-based monitoring (products tracked by name via Bing search)
-        logger.info('Running search-based price monitoring (Bing)...');
-        const searchResults = await runSearchMonitor({
-            limit: 20,  // Process up to 20 search-based products per cycle
-            delayBetweenProducts: 15000,  // 15 seconds between products (be polite to Bing)
-        });
-        logger.info({ 
-            total: searchResults.total, 
-            successful: searchResults.successful, 
-            failed: searchResults.failed 
-        }, 'Search-based monitoring completed');
-        
-        logger.info('All price monitoring completed');
+        logger.info(`
+╔════════════════════════════════════════════════════════════╗
+║         E-Commerce Price Tracker API Server                ║
+╠════════════════════════════════════════════════════════════╣
+║  API:     http://localhost:${apiPort.toString().padEnd(5)}/api                       ║
+║  Health:  http://localhost:${healthPort.toString().padEnd(5)}/health                    ║
+╠════════════════════════════════════════════════════════════╣
+║  To scrape prices, run: npm run monitor                    ║
+║  Press Ctrl+C to stop the server                           ║
+╚════════════════════════════════════════════════════════════╝
+`);
 
-        // Close connections
-        await browserPool.closeAll();
-        logger.info('Browser pool closed');
-        
-        await closeDatabaseConnection();
-        logger.info('Application finished successfully');
-        process.exit(0);
+        // Keep server running - don't exit
+        // The API server will handle requests until Ctrl+C
 
     } catch (error) {
         logger.error({ error }, 'Application error');
-        await browserPool.closeAll();
         await closeDatabaseConnection();
         process.exit(1);
     }
