@@ -1,33 +1,36 @@
 import logger from '../utils/logger.js';
 import { pool, closeDatabaseConnection } from '../db/connect-pg.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
-const SEED_PRODUCTS = [
-    {
-        url: 'https://www.amazon.com/dp/B0DHS3B7S1',
-        site: 'Amazon',
-        enabled: true,
-        check_interval_minutes: 60
-    },
-    {
-        url: 'https://www.amazon.com/dp/B0DHS5F4PZ',
-        site: 'Amazon',
-        enabled: true,
-        check_interval_minutes: 60
-    },
-    {
-        url: 'https://www.burton.com/us/en/p/mens-burton-cartel-x-snowboard-bindings/W25JP-109861.html',
-        site: 'Burton',
-        enabled: true,
-        check_interval_minutes: 120
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load seed data from JSON file
+function loadSeedData() {
+    try {
+        const seedPath = path.join(__dirname, '../../data/seed-products.json');
+        const data = JSON.parse(readFileSync(seedPath, 'utf8'));
+        return data.products;
+    } catch (error) {
+        console.error('❌ Error loading seed data:', error.message);
+        console.error('   Make sure data/seed-products.json exists');
+        throw error;
     }
-];
+}
 
 async function seedDatabase() {
-    try {
-        logger.info('Starting database seeding...');
+    const products = loadSeedData();
+    
+    console.log('🌱 Starting database seeding...');
+    console.log(`   Found ${products.length} products to seed`);
 
-        // Insert tracked products
-        for (const product of SEED_PRODUCTS) {
+    let seeded = 0;
+    let skipped = 0;
+    
+    try {
+        for (const product of products) {
             const result = await pool.query(
                 `INSERT INTO tracked_products (url, site, enabled, check_interval_minutes)
                  VALUES ($1, $2, $3, $4)
@@ -37,15 +40,29 @@ async function seedDatabase() {
             );
 
             if (result.rows.length > 0) {
-                logger.info({ id: result.rows[0].id, url: product.url }, 'Seeded product');
+                console.log(`   ✓ Seeded: ${product.description || product.url}`);
+                seeded++;
             } else {
-                logger.info({ url: product.url }, 'Product already exists');
+                console.log(`   - Skipped (exists): ${product.description || product.url}`);
+                skipped++;
             }
         }
 
-        logger.info('✅ Database seeding completed successfully');
+        console.log('');
+        console.log('✅ Database seeding completed successfully');
+        console.log(`   Seeded: ${seeded}, Skipped: ${skipped}`);
+        
+        logger.info({ seeded, skipped }, 'Database seeding completed');
     } catch (error) {
-        logger.error({ error }, '❌ Database seeding failed');
+        console.error('');
+        console.error('❌ Database seeding failed:', error.message);
+        if (error.code) {
+            console.error(`   Error code: ${error.code}`);
+        }
+        if (error.detail) {
+            console.error(`   Detail: ${error.detail}`);
+        }
+        logger.error({ error }, 'Database seeding failed');
         throw error;
     }
 }
@@ -56,6 +73,11 @@ async function main() {
         await closeDatabaseConnection();
         process.exit(0);
     } catch (error) {
+        console.error('');
+        console.error('💡 Troubleshooting tips:');
+        console.error('   1. Check database connection: npm run check-db');
+        console.error('   2. Run migrations first: npm run migrate');
+        console.error('   3. Check your .env file has correct credentials');
         await closeDatabaseConnection();
         process.exit(1);
     }

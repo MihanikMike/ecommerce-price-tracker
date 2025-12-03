@@ -1,0 +1,3 @@
+-- Rollback for 002_add_indexes.sql
+-- This removes additional indexes (if any were added in this migration)
+-- Note: Some indexes may already be handled by 001_init.down.sql

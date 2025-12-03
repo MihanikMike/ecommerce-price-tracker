@@ -1,0 +1,31 @@
+{
+  "products": [
+    {
+      "url": "https://www.amazon.com/dp/B0DHS3B7S1",
+      "site": "Amazon",
+      "enabled": true,
+      "check_interval_minutes": 60,
+      "description": "Sample Amazon product 1"
+    },
+    {
+      "url": "https://www.amazon.com/dp/B0DHS5F4PZ",
+      "site": "Amazon",
+      "enabled": true,
+      "check_interval_minutes": 60,
+      "description": "Sample Amazon product 2"
+    },
+    {
+      "url": "https://www.burton.com/us/en/p/mens-burton-cartel-x-snowboard-bindings/W25JP-109861.html",
+      "site": "Burton",
+      "enabled": true,
+      "check_interval_minutes": 120,
+      "description": "Burton Cartel X Snowboard Bindings"
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Seed data for price tracker",
+    "created": "2025-12-03",
+    "supported_sites": ["Amazon", "Burton"]
+  }
+}
