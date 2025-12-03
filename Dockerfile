@@ -35,7 +35,7 @@ RUN rm -rf .git .env.example tests/ docs/ *.md
 # -----------------------------------------------------------------------------
 # Stage 3: Production Runtime
 # -----------------------------------------------------------------------------
-FROM mcr.microsoft.com/playwright:v1.52.0-noble AS runtime
+FROM mcr.microsoft.com/playwright:v1.57.0-noble AS runtime
 
 # Set environment
 ENV NODE_ENV=production
