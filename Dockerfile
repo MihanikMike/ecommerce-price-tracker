@@ -43,15 +43,14 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 
-# Create non-root user for security
-RUN groupadd --gid 1001 nodejs && \
-    useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home appuser
+# The Playwright image already has pwuser (uid 1000, gid 1000)
+# We'll use that user for security instead of creating a new one
 
 # Copy application from builder
-COPY --from=builder --chown=appuser:nodejs /app ./
+COPY --from=builder --chown=pwuser:pwuser /app ./
 
 # Copy data files needed at runtime
-COPY --chown=appuser:nodejs data/ ./data/
+COPY --chown=pwuser:pwuser data/ ./data/
 
 # Install only Firefox (smaller than all browsers)
 RUN npx playwright install firefox && \
@@ -59,10 +58,10 @@ RUN npx playwright install firefox && \
 
 # Create directories for exports and logs
 RUN mkdir -p /app/exports /app/logs && \
-    chown -R appuser:nodejs /app/exports /app/logs
+    chown -R pwuser:pwuser /app/exports /app/logs
 
 # Switch to non-root user
-USER appuser
+USER pwuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
