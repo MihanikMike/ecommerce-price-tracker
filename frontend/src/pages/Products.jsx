@@ -206,13 +206,28 @@ export default function Products() {
 
   const { data, isLoading } = useProducts(page, 20, siteFilter || null);
   
-  const products = data?.data || [];
+  // API returns { products: [], pagination: {} }
+  const products = data?.products || [];
   const pagination = data?.pagination || { page: 1, totalPages: 1, total: 0 };
 
-  // Filter products by search
+  // Filter products by search (client-side for now)
   const filteredProducts = products.filter(p => 
     p.title?.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Map API response fields to component expected fields
+  const mappedProducts = filteredProducts.map(p => ({
+    id: p.id,
+    title: p.title,
+    site: p.site,
+    url: p.url,
+    currentPrice: p.latest_price,
+    currency: p.currency,
+    priceChange: 0, // Would need price change calculation
+    lastChecked: p.price_captured_at || p.last_seen_at,
+    priceCount: p.price_count,
+    isTracked: false, // Would need to check against tracked products
+  }));
 
   const siteOptions = [
     { value: '', label: 'All Sites' },
@@ -310,15 +325,15 @@ export default function Products() {
                     </td>
                   </tr>
                 ))
-              ) : filteredProducts.length > 0 ? (
-                filteredProducts.map((product, index) => (
+              ) : mappedProducts.length > 0 ? (
+                mappedProducts.map((product, index) => (
                   <ProductRow key={product.id} product={product} index={index} />
                 ))
               ) : null}
             </tbody>
           </table>
           
-          {!isLoading && filteredProducts.length === 0 && <EmptyState />}
+          {!isLoading && mappedProducts.length === 0 && <EmptyState />}
         </div>
 
         {/* Pagination */}

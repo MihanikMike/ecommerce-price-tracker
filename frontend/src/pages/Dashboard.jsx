@@ -12,11 +12,15 @@ import {
   BarChart3,
   Zap,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Database,
+  HardDrive
 } from 'lucide-react';
 import { Card, StatsCard, Button, CardSkeleton } from '../components/common';
 import { PriceChangeBadge, SiteBadge } from '../components/common/Badge';
 import { useStats } from '../hooks/useStats';
+import { usePriceChanges } from '../hooks/usePriceChanges';
+import { formatPrice, formatRelativeTime } from '../utils/formatters';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -136,6 +140,8 @@ function QuickAction({ icon: Icon, title, description, href, color = 'slate' }) 
 
 // Recent price drop item
 function PriceDropItem({ product }) {
+  const priceChange = product.price_change_percent || 0;
+  
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -155,60 +161,67 @@ function PriceDropItem({ product }) {
         <TrendingDown className="h-5 w-5 text-emerald-400" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white truncate group-hover:text-emerald-300 transition-colors">
+        <Link 
+          to={`/products/${product.product_id}`}
+          className="text-sm font-medium text-white truncate group-hover:text-emerald-300 transition-colors block"
+        >
           {product.title}
-        </p>
+        </Link>
         <div className="flex items-center gap-2 mt-1">
           <SiteBadge site={product.site} />
           <span className="text-xs text-slate-500">
-            {product.timeAgo}
+            {formatRelativeTime(product.captured_at)}
           </span>
         </div>
       </div>
       <div className="text-right">
-        <div className="text-sm font-semibold text-white">${product.currentPrice}</div>
-        <PriceChangeBadge change={product.change} size="sm" />
+        <div className="text-sm font-semibold text-white">
+          {formatPrice(product.new_price, product.currency)}
+        </div>
+        <PriceChangeBadge change={priceChange} size="sm" />
       </div>
     </motion.div>
   );
 }
 
 export default function Dashboard() {
-  const { data: stats, isLoading } = useStats();
+  const { data: stats, isLoading: statsLoading } = useStats();
+  const { data: priceDropsData, isLoading: dropsLoading } = usePriceChanges(24, 0, 5);
 
+  const isLoading = statsLoading;
+  const recentDrops = priceDropsData?.priceChanges || [];
+
+  // Map API response to stat cards
   const statCards = [
     {
       label: 'Total Products',
-      value: stats?.totalProducts || 0,
+      value: stats?.database?.product_count || 0,
       icon: Package,
       color: 'indigo',
       trend: 'up',
-      trendValue: '+12%',
       sparklineColor: 'indigo',
     },
     {
       label: 'Tracked Items',
-      value: stats?.trackedProducts || 0,
+      value: stats?.tracking?.total || 0,
+      subtext: `${stats?.tracking?.enabled || 0} active`,
       icon: Target,
       color: 'emerald',
-      trend: 'up',
-      trendValue: '+5',
       sparklineColor: 'emerald',
     },
     {
-      label: 'Price Drops (24h)',
-      value: stats?.priceDrops24h || 0,
-      icon: TrendingDown,
+      label: 'Price Records',
+      value: stats?.database?.price_history_count || 0,
+      icon: Database,
       color: 'amber',
-      trend: 'down',
-      trendValue: '-3',
       sparklineColor: 'amber',
     },
     {
-      label: 'Active Monitors',
-      value: stats?.activeMonitors || 0,
-      icon: Activity,
+      label: 'Database Size',
+      value: stats?.database?.database_size || '0 MB',
+      icon: HardDrive,
       color: 'sky',
+      isText: true,
       sparklineColor: 'indigo',
     },
   ];
@@ -217,13 +230,6 @@ export default function Dashboard() {
     { icon: Plus, title: 'Add Product', description: 'Start tracking a new product', href: '/tracked', color: 'indigo' },
     { icon: Search, title: 'Search Products', description: 'Find products in database', href: '/products', color: 'emerald' },
     { icon: BarChart3, title: 'View Analytics', description: 'Price history & trends', href: '/price-drops', color: 'amber' },
-  ];
-
-  // Sample price drops data
-  const recentDrops = [
-    { id: 1, title: 'Sony WH-1000XM5 Wireless Headphones', site: 'amazon', currentPrice: '279.99', change: -15.2, timeAgo: '2h ago' },
-    { id: 2, title: 'Burton Custom Flying V Snowboard', site: 'burton', currentPrice: '549.95', change: -12.0, timeAgo: '4h ago' },
-    { id: 3, title: 'Apple AirPods Pro (2nd Gen)', site: 'amazon', currentPrice: '189.99', change: -8.5, timeAgo: '6h ago' },
   ];
 
   return (
@@ -262,11 +268,12 @@ export default function Dashboard() {
             >
               <StatsCard
                 label={stat.label}
-                value={stat.value.toLocaleString()}
+                value={stat.isText ? stat.value : (typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value)}
                 icon={stat.icon}
                 color={stat.color}
                 trend={stat.trend}
                 trendValue={stat.trendValue}
+                subtext={stat.subtext}
               />
             </motion.div>
           ))
@@ -309,11 +316,24 @@ export default function Dashboard() {
               </Link>
             </div>
             
-            {recentDrops.length > 0 ? (
+            {dropsLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="animate-pulse flex items-center gap-4 p-3">
+                    <div className="h-12 w-12 rounded-xl bg-slate-700/50" />
+                    <div className="flex-1">
+                      <div className="h-4 bg-slate-700/50 rounded w-3/4 mb-2" />
+                      <div className="h-3 bg-slate-700/50 rounded w-1/2" />
+                    </div>
+                    <div className="h-4 w-16 bg-slate-700/50 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : recentDrops.length > 0 ? (
               <div className="space-y-1">
                 {recentDrops.map((product, index) => (
                   <motion.div
-                    key={product.id}
+                    key={product.id || index}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
@@ -339,14 +359,32 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Clock className="h-5 w-5 text-sky-400" />
-              Recent Activity
+              System Status
             </h2>
           </div>
-          <div className="flex items-center gap-4 text-sm text-slate-400">
-            <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/30">
               <div className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span>Price monitor ran successfully</span>
-              <span className="text-slate-600">• 5 min ago</span>
+              <div>
+                <span className="text-slate-400">Tracking Mode</span>
+                <p className="text-white font-medium">
+                  {stats?.tracking?.url_based || 0} URL, {stats?.tracking?.search_based || 0} Search
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/30">
+              <div className="h-2 w-2 rounded-full bg-amber-500" />
+              <div>
+                <span className="text-slate-400">Price History Size</span>
+                <p className="text-white font-medium">{stats?.database?.price_history_size || 'N/A'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/30">
+              <div className="h-2 w-2 rounded-full bg-indigo-500" />
+              <div>
+                <span className="text-slate-400">Last Update</span>
+                <p className="text-white font-medium">{stats?.timestamp ? formatRelativeTime(stats.timestamp) : 'N/A'}</p>
+              </div>
             </div>
           </div>
         </Card>

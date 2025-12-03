@@ -61,6 +61,25 @@ export function recordError(error) {
 }
 
 /**
+ * Get current app state (for testing)
+ */
+export function getAppState() {
+    return { ...appState };
+}
+
+/**
+ * Reset app state (for testing)
+ */
+export function resetAppState() {
+    appState.isReady = false;
+    appState.lastMonitorRun = null;
+    appState.lastMonitorSuccess = false;
+    appState.totalScrapesAttempted = 0;
+    appState.totalScrapesSuccessful = 0;
+    appState.errors = [];
+}
+
+/**
  * Get comprehensive health status
  */
 async function getHealthStatus() {

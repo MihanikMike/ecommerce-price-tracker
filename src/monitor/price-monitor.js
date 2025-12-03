@@ -23,8 +23,10 @@ import config from "../config/index.js";
 
 /**
  * Get site name from URL for metrics
+ * @param {string} url - Product URL
+ * @returns {string} Site name ('amazon', 'burton', or 'unknown')
  */
-function getSiteFromUrl(url) {
+export function getSiteFromUrl(url) {
     if (url.includes("amazon.com")) return 'amazon';
     if (url.includes("burton.com")) return 'burton';
     return 'unknown';
@@ -32,8 +34,10 @@ function getSiteFromUrl(url) {
 
 /**
  * Determine which scraper to use based on URL
+ * @param {string} url - Product URL
+ * @returns {object|null} Scraper info with name and scraper function, or null if unsupported
  */
-function getScraperForUrl(url) {
+export function getScraperForUrl(url) {
     if (url.includes("amazon.com")) return { name: 'Amazon', scraper: scrapeAmazon };
     if (url.includes("burton.com")) return { name: 'Burton', scraper: scrapeBurton };
     return null;

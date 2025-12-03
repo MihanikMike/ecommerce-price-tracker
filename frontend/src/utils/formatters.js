@@ -76,6 +76,17 @@ export function truncate(text, maxLength = 50) {
 }
 
 /**
+ * Format check interval (minutes to human readable)
+ */
+export function formatInterval(minutes) {
+  if (!minutes) return 'Unknown';
+  
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}h`;
+  return `${Math.floor(minutes / 1440)}d`;
+}
+
+/**
  * Format bytes to human readable
  */
 export function formatBytes(bytes) {

@@ -95,6 +95,19 @@ const api = {
     return res.json();
   },
 
+  // ==================== Price History ====================
+
+  /**
+   * Get price history for a product
+   */
+  getProductHistory: async (id, { limit = 100, days = null } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (days) params.append('days', String(days));
+    const res = await fetch(`${API_BASE}/products/${id}/history?${params}`);
+    if (!res.ok) throw new Error('Failed to fetch price history');
+    return res.json();
+  },
+
   // ==================== Price Changes ====================
 
   /**

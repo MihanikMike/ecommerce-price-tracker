@@ -176,6 +176,22 @@ describe('product-matcher', () => {
       expect(result.allPrices.length).toBe(1);
     });
 
+    it('should return nulls when all products have invalid prices', () => {
+      const products = [
+        { title: 'A', price: 0, site: 'Amazon' },
+        { title: 'B', price: -10, site: 'BestBuy' },
+        { title: 'C', price: null, site: 'Walmart' },
+      ];
+
+      const result = comparePrices(products);
+
+      expect(result.lowestPrice).toBeNull();
+      expect(result.highestPrice).toBeNull();
+      expect(result.averagePrice).toBeNull();
+      expect(result.priceRange).toBeNull();
+      expect(result.savings).toBeNull();
+    });
+
     it('should generate best_price recommendation', () => {
       const products = [
         { title: 'A', price: 99, site: 'Amazon' },

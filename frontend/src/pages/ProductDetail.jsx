@@ -8,72 +8,25 @@ import {
   TrendingDown, 
   TrendingUp,
   Target,
-  Clock,
-  Calendar,
   DollarSign,
-  BarChart3
+  BarChart3,
+  Database
 } from 'lucide-react';
 import { Card, StatsCard, Button, PageLoader } from '../components/common';
 import { PriceChangeBadge, SiteBadge, Badge } from '../components/common/Badge';
+import { PriceChart } from '../components/charts';
 import { useProduct } from '../hooks/useProducts';
-import { formatPrice, formatDateTime } from '../utils/formatters';
-
-// Price Chart Placeholder (would integrate Chart.js)
-function PriceChart({ productId }) {
-  return (
-    <div className={clsx(
-      'h-64 rounded-xl',
-      'bg-gradient-to-br from-slate-800/50 to-slate-900/50',
-      'border border-slate-700/30',
-      'flex items-center justify-center'
-    )}>
-      <div className="text-center">
-        <BarChart3 className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-        <p className="text-slate-500">Price chart will be rendered here</p>
-        <p className="text-sm text-slate-600 mt-1">Using Chart.js</p>
-      </div>
-    </div>
-  );
-}
-
-// Price history table row
-function PriceHistoryRow({ entry, index }) {
-  return (
-    <motion.tr
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05 }}
-      className="border-b border-slate-800/30 hover:bg-slate-800/20 transition-colors"
-    >
-      <td className="py-3 px-4">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Calendar className="h-4 w-4" />
-          {formatDateTime(entry.checkedAt)}
-        </div>
-      </td>
-      <td className="py-3 px-4">
-        <span className="text-sm font-semibold text-white">
-          {formatPrice(entry.price)}
-        </span>
-      </td>
-      <td className="py-3 px-4">
-        {entry.change !== 0 && (
-          <PriceChangeBadge change={entry.change} size="sm" />
-        )}
-      </td>
-    </motion.tr>
-  );
-}
+import { formatPrice, formatDateTime, formatRelativeTime } from '../utils/formatters';
 
 export default function ProductDetail() {
   const { id } = useParams();
-  const { data: product, isLoading, error } = useProduct(id);
+  const { data, isLoading, error } = useProduct(id);
 
   if (isLoading) {
     return <PageLoader text="Loading product details..." />;
   }
 
-  if (error || !product) {
+  if (error || !data?.product) {
     return (
       <div className="text-center py-16">
         <Package className="h-16 w-16 text-slate-600 mx-auto mb-4" />
@@ -88,18 +41,27 @@ export default function ProductDetail() {
     );
   }
 
-  // Sample price history
-  const priceHistory = [
-    { id: 1, checkedAt: new Date(), price: product.currentPrice || 99.99, change: 0 },
-    { id: 2, checkedAt: new Date(Date.now() - 86400000), price: 109.99, change: -9.1 },
-    { id: 3, checkedAt: new Date(Date.now() - 172800000), price: 109.99, change: 0 },
-  ];
+  const product = data.product;
+  const priceSummary = data.priceSummary || {};
+
+  // Get price values
+  const currentPrice = product.latest_price || priceSummary.latest_price;
+  const lowestPrice = priceSummary.lowest_price;
+  const highestPrice = priceSummary.highest_price;
+  const avgPrice = priceSummary.average_price;
+  const priceCount = priceSummary.price_count || product.price_count || 0;
+  const currency = product.currency || 'USD';
+
+  // Calculate price change percentage if we have data
+  const priceChange = priceSummary.latest_price && priceSummary.previous_price
+    ? ((priceSummary.latest_price - priceSummary.previous_price) / priceSummary.previous_price) * 100
+    : 0;
 
   const stats = [
-    { label: 'Current Price', value: formatPrice(product.currentPrice || 99.99), icon: DollarSign, color: 'indigo' },
-    { label: 'Lowest Price', value: formatPrice(product.lowestPrice || 89.99), icon: TrendingDown, color: 'emerald' },
-    { label: 'Highest Price', value: formatPrice(product.highestPrice || 129.99), icon: TrendingUp, color: 'rose' },
-    { label: 'Price Checks', value: product.checkCount || 24, icon: Clock, color: 'sky' },
+    { label: 'Current Price', value: formatPrice(currentPrice, currency), icon: DollarSign, color: 'indigo' },
+    { label: 'Lowest Price', value: formatPrice(lowestPrice, currency), icon: TrendingDown, color: 'emerald' },
+    { label: 'Highest Price', value: formatPrice(highestPrice, currency), icon: TrendingUp, color: 'rose' },
+    { label: 'Price Records', value: priceCount, icon: Database, color: 'sky', isNumber: true },
   ];
 
   return (
@@ -138,9 +100,9 @@ export default function ProductDetail() {
                   {product.title || 'Product Title'}
                 </h1>
                 <div className="flex items-center gap-2 mb-4">
-                  <SiteBadge site={product.site || 'amazon'} />
-                  {product.isTracked && (
-                    <Badge variant="primary" dot>Actively Tracked</Badge>
+                  <SiteBadge site={product.site || 'unknown'} />
+                  {product.asin && (
+                    <Badge variant="secondary" size="sm">ASIN: {product.asin}</Badge>
                   )}
                 </div>
               </div>
@@ -152,22 +114,26 @@ export default function ProductDetail() {
                     </Button>
                   </a>
                 )}
-                <Button variant="primary" size="sm" icon={Target}>
-                  Track
-                </Button>
+                <Link to="/tracked">
+                  <Button variant="primary" size="sm" icon={Target}>
+                    Track
+                  </Button>
+                </Link>
               </div>
             </div>
 
             {/* Price Display */}
             <div className="flex items-baseline gap-3 mb-4">
               <span className="text-4xl font-bold text-white">
-                {formatPrice(product.currentPrice || 99.99)}
+                {formatPrice(currentPrice, currency)}
               </span>
-              <PriceChangeBadge change={product.priceChange || -12.5} size="lg" />
+              {priceChange !== 0 && (
+                <PriceChangeBadge change={priceChange} size="lg" />
+              )}
             </div>
 
             <p className="text-sm text-slate-500">
-              Last updated: {formatDateTime(product.lastChecked || new Date())}
+              Last updated: {formatRelativeTime(product.price_captured_at || product.last_seen_at)}
             </p>
           </div>
         </div>
@@ -179,43 +145,92 @@ export default function ProductDetail() {
           <StatsCard
             key={stat.label}
             label={stat.label}
-            value={stat.value}
+            value={stat.isNumber ? stat.value.toLocaleString() : stat.value}
             icon={stat.icon}
             color={stat.color}
           />
         ))}
       </div>
 
-      {/* Price Chart & History */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart */}
-        <Card className="lg:col-span-2">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-indigo-400" />
-            Price History
-          </h2>
-          <PriceChart productId={id} />
+      {/* Price Chart */}
+      <Card>
+        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-indigo-400" />
+          Price History
+        </h2>
+        <PriceChart productId={id} />
+      </Card>
+
+      {/* Product Details */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Additional Info */}
+        <Card>
+          <h2 className="text-lg font-semibold text-white mb-4">Product Information</h2>
+          <dl className="space-y-3">
+            {product.asin && (
+              <div className="flex justify-between py-2 border-b border-slate-800/50">
+                <dt className="text-slate-400">ASIN</dt>
+                <dd className="text-white font-mono text-sm">{product.asin}</dd>
+              </div>
+            )}
+            <div className="flex justify-between py-2 border-b border-slate-800/50">
+              <dt className="text-slate-400">Site</dt>
+              <dd className="text-white capitalize">{product.site}</dd>
+            </div>
+            <div className="flex justify-between py-2 border-b border-slate-800/50">
+              <dt className="text-slate-400">First Seen</dt>
+              <dd className="text-white">{formatDateTime(product.first_seen_at)}</dd>
+            </div>
+            <div className="flex justify-between py-2 border-b border-slate-800/50">
+              <dt className="text-slate-400">Last Seen</dt>
+              <dd className="text-white">{formatDateTime(product.last_seen_at)}</dd>
+            </div>
+            {avgPrice && (
+              <div className="flex justify-between py-2 border-b border-slate-800/50">
+                <dt className="text-slate-400">Average Price</dt>
+                <dd className="text-white">{formatPrice(avgPrice, currency)}</dd>
+              </div>
+            )}
+          </dl>
         </Card>
 
-        {/* Recent Changes */}
+        {/* Price Statistics */}
         <Card>
-          <h2 className="text-lg font-semibold text-white mb-4">Recent Changes</h2>
-          <div className="overflow-x-auto -mx-6">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-800/50">
-                  <th className="py-2 px-4 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
-                  <th className="py-2 px-4 text-left text-xs font-medium text-slate-500 uppercase">Price</th>
-                  <th className="py-2 px-4 text-left text-xs font-medium text-slate-500 uppercase">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {priceHistory.map((entry, index) => (
-                  <PriceHistoryRow key={entry.id} entry={entry} index={index} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <h2 className="text-lg font-semibold text-white mb-4">Price Statistics</h2>
+          <dl className="space-y-3">
+            <div className="flex justify-between py-2 border-b border-slate-800/50">
+              <dt className="text-slate-400">Current Price</dt>
+              <dd className="text-white font-semibold">{formatPrice(currentPrice, currency)}</dd>
+            </div>
+            {lowestPrice && (
+              <div className="flex justify-between py-2 border-b border-slate-800/50">
+                <dt className="text-slate-400 flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-emerald-400" />
+                  All-time Low
+                </dt>
+                <dd className="text-emerald-400 font-semibold">{formatPrice(lowestPrice, currency)}</dd>
+              </div>
+            )}
+            {highestPrice && (
+              <div className="flex justify-between py-2 border-b border-slate-800/50">
+                <dt className="text-slate-400 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-rose-400" />
+                  All-time High
+                </dt>
+                <dd className="text-rose-400 font-semibold">{formatPrice(highestPrice, currency)}</dd>
+              </div>
+            )}
+            <div className="flex justify-between py-2 border-b border-slate-800/50">
+              <dt className="text-slate-400">Total Price Records</dt>
+              <dd className="text-white">{priceCount.toLocaleString()}</dd>
+            </div>
+            {priceSummary.first_price_date && (
+              <div className="flex justify-between py-2">
+                <dt className="text-slate-400">Tracking Since</dt>
+                <dd className="text-white">{formatDateTime(priceSummary.first_price_date)}</dd>
+              </div>
+            )}
+          </dl>
         </Card>
       </div>
     </motion.div>

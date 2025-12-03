@@ -5,6 +5,7 @@ import { Search } from 'lucide-react';
 export const Input = forwardRef(function Input({
   label,
   error,
+  helperText,
   icon: Icon,
   className = '',
   containerClassName = '',
@@ -35,6 +36,9 @@ export const Input = forwardRef(function Input({
           {...props}
         />
       </div>
+      {helperText && !error && (
+        <p className="mt-2 text-xs text-slate-500">{helperText}</p>
+      )}
       {error && (
         <p className="mt-2 text-sm text-rose-400">{error}</p>
       )}

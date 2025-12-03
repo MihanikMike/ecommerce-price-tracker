@@ -18,23 +18,57 @@ import { Card, Button, PageLoader, CardSkeleton } from '../components/common';
 import { Input, SearchInput, Toggle } from '../components/common/Input';
 import { SiteBadge, StatusBadge, Badge } from '../components/common/Badge';
 import { useTracked, useAddTracked, useUpdateTracked, useDeleteTracked } from '../hooks/useTracked';
-import { formatRelativeTime, truncate } from '../utils/formatters';
+import { formatRelativeTime, truncate, formatInterval } from '../utils/formatters';
 
 // Add Product Modal
 function AddProductModal({ isOpen, onClose }) {
   const [mode, setMode] = useState('url'); // 'url' or 'search'
   const [url, setUrl] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [productName, setProductName] = useState('');
+  const [site, setSite] = useState('');
+  const [error, setError] = useState('');
   const { mutate: addTracked, isPending } = useAddTracked();
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (mode === 'url' && url) {
-      addTracked({ url, mode: 'url' });
-      onClose();
-    } else if (mode === 'search' && searchQuery) {
-      addTracked({ query: searchQuery, mode: 'search' });
-      onClose();
+    setError('');
+    
+    if (mode === 'url') {
+      if (!url.trim()) {
+        setError('Please enter a product URL');
+        return;
+      }
+      addTracked(
+        { url: url.trim(), site: site || undefined },
+        {
+          onSuccess: () => {
+            setUrl('');
+            setSite('');
+            onClose();
+          },
+          onError: (err) => {
+            setError(err.message || 'Failed to add product');
+          },
+        }
+      );
+    } else {
+      if (!productName.trim()) {
+        setError('Please enter a product name');
+        return;
+      }
+      addTracked(
+        { productName: productName.trim(), site: site || 'any' },
+        {
+          onSuccess: () => {
+            setProductName('');
+            setSite('');
+            onClose();
+          },
+          onError: (err) => {
+            setError(err.message || 'Failed to add product');
+          },
+        }
+      );
     }
   };
 
@@ -122,12 +156,42 @@ function AddProductModal({ isOpen, onClose }) {
           {/* Search Input */}
           {mode === 'search' && (
             <Input
-              label="Search Query"
-              placeholder="Search for products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              label="Product Name"
+              placeholder="e.g., Sony WH-1000XM5 Headphones"
+              value={productName}
+              onChange={(e) => setProductName(e.target.value)}
               icon={Search}
+              helperText="Enter the product name to search for across supported sites"
             />
+          )}
+
+          {/* Site Selection */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Site (optional)
+            </label>
+            <select
+              value={site}
+              onChange={(e) => setSite(e.target.value)}
+              className={clsx(
+                'w-full px-4 py-2.5 rounded-xl',
+                'bg-slate-800/50 border border-slate-700/50',
+                'text-white placeholder-slate-500',
+                'focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50',
+                'transition-all duration-200'
+              )}
+            >
+              <option value="">{mode === 'url' ? 'Auto-detect' : 'Any site'}</option>
+              <option value="amazon">Amazon</option>
+              <option value="burton">Burton</option>
+            </select>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30">
+              <p className="text-sm text-rose-400">{error}</p>
+            </div>
           )}
 
           {/* Submit */}
@@ -255,13 +319,29 @@ export default function Tracked() {
   const [filter, setFilter] = useState('all'); // 'all', 'enabled', 'disabled'
 
   const { data, isLoading } = useTracked(1, 50);
-  const products = data?.data || [];
+  
+  // API returns { tracked: [], pagination: {} }
+  const products = data?.tracked || [];
 
   const filteredProducts = products.filter(p => {
     if (filter === 'enabled') return p.enabled;
     if (filter === 'disabled') return !p.enabled;
     return true;
   });
+
+  // Map API fields to component expected fields
+  const mappedProducts = filteredProducts.map(p => ({
+    id: p.id,
+    title: p.name || p.search_query || p.url,
+    query: p.search_query,
+    url: p.url,
+    site: p.site,
+    mode: p.tracking_mode,
+    enabled: p.enabled,
+    checkInterval: formatInterval(p.check_interval_minutes),
+    lastChecked: p.last_checked,
+    createdAt: p.created_at,
+  }));
 
   const stats = {
     total: products.length,
@@ -321,9 +401,9 @@ export default function Tracked() {
             <CardSkeleton key={i} />
           ))}
         </div>
-      ) : filteredProducts.length > 0 ? (
+      ) : mappedProducts.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filteredProducts.map((product, index) => (
+          {mappedProducts.map((product, index) => (
             <TrackedProductCard key={product.id} product={product} index={index} />
           ))}
         </div>

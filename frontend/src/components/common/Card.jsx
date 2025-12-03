@@ -86,6 +86,7 @@ export function StatsCard({
   icon: Icon, 
   trend, 
   trendValue,
+  subtext,
   color = 'indigo',
   className = '' 
 }) {
@@ -132,6 +133,9 @@ export function StatsCard({
           >
             {value}
           </motion.p>
+          {subtext && (
+            <p className="text-xs text-slate-500">{subtext}</p>
+          )}
           {trend && (
             <div className={clsx(
               'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full',

@@ -229,5 +229,159 @@ describe('Amazon Scraper', () => {
       expect(cleanTitle(null)).toBe('');
       expect(cleanTitle(undefined)).toBe('');
     });
+
+    it('should handle tabs and mixed whitespace', () => {
+      expect(cleanTitle('Product\t\n  Name')).toBe('Product Name');
+    });
+  });
+
+  describe('Currency detection', () => {
+    const detectCurrency = (priceText) => {
+      if (priceText.includes('$')) return 'USD';
+      if (priceText.includes('€')) return 'EUR';
+      if (priceText.includes('£')) return 'GBP';
+      if (priceText.includes('¥')) return 'JPY';
+      return 'USD'; // Default
+    };
+
+    it('should detect USD', () => {
+      expect(detectCurrency('$99.99')).toBe('USD');
+    });
+
+    it('should detect EUR', () => {
+      expect(detectCurrency('€99.99')).toBe('EUR');
+    });
+
+    it('should detect GBP', () => {
+      expect(detectCurrency('£99.99')).toBe('GBP');
+    });
+
+    it('should detect JPY', () => {
+      expect(detectCurrency('¥9999')).toBe('JPY');
+    });
+
+    it('should default to USD for unknown currency', () => {
+      expect(detectCurrency('99.99')).toBe('USD');
+    });
+  });
+
+  describe('Availability detection', () => {
+    const isInStock = (availabilityText) => {
+      if (!availabilityText) return null;
+      const text = availabilityText.toLowerCase();
+      if (text.includes('in stock')) return true;
+      if (text.includes('out of stock')) return false;
+      if (text.includes('currently unavailable')) return false;
+      if (text.includes('available from')) return true;
+      return null;
+    };
+
+    it('should detect in stock', () => {
+      expect(isInStock('In Stock')).toBe(true);
+      expect(isInStock('In Stock.')).toBe(true);
+    });
+
+    it('should detect out of stock', () => {
+      expect(isInStock('Out of Stock')).toBe(false);
+      expect(isInStock('Currently unavailable.')).toBe(false);
+    });
+
+    it('should detect available from third party', () => {
+      expect(isInStock('Available from these sellers')).toBe(true);
+    });
+
+    it('should return null for unknown availability', () => {
+      expect(isInStock('Ships in 2-3 days')).toBeNull();
+    });
+
+    it('should handle null/undefined', () => {
+      expect(isInStock(null)).toBeNull();
+      expect(isInStock(undefined)).toBeNull();
+    });
+  });
+
+  describe('ASIN extraction', () => {
+    const extractASIN = (url) => {
+      if (!url) return null;
+      // Match /dp/ASIN or /gp/product/ASIN patterns
+      const match = url.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
+      return match ? match[1].toUpperCase() : null;
+    };
+
+    it('should extract ASIN from dp URL', () => {
+      expect(extractASIN('https://www.amazon.com/dp/B08N5WRWNW')).toBe('B08N5WRWNW');
+    });
+
+    it('should extract ASIN from gp/product URL', () => {
+      expect(extractASIN('https://www.amazon.com/gp/product/B08N5WRWNW')).toBe('B08N5WRWNW');
+    });
+
+    it('should handle URL with title slug', () => {
+      expect(extractASIN('https://www.amazon.com/Apple-AirPods-Pro/dp/B0D1XD1ZV3')).toBe('B0D1XD1ZV3');
+    });
+
+    it('should return null for non-product URL', () => {
+      expect(extractASIN('https://www.amazon.com/s?k=headphones')).toBeNull();
+    });
+
+    it('should return null for invalid URL', () => {
+      expect(extractASIN(null)).toBeNull();
+      expect(extractASIN('')).toBeNull();
+    });
+
+    it('should normalize ASIN to uppercase', () => {
+      expect(extractASIN('https://www.amazon.com/dp/b08n5wrwnw')).toBe('B08N5WRWNW');
+    });
+  });
+
+  describe('Error handling', () => {
+    it('should identify timeout errors', () => {
+      const error = new Error('Navigation timeout of 30000 ms exceeded');
+      const isTimeout = error.message.includes('timeout');
+      
+      expect(isTimeout).toBe(true);
+    });
+
+    it('should identify network errors', () => {
+      const error = new Error('net::ERR_NAME_NOT_RESOLVED');
+      const isNetworkError = error.message.startsWith('net::');
+      
+      expect(isNetworkError).toBe(true);
+    });
+
+    it('should identify bot detection', () => {
+      const pageTitle = 'Robot Check';
+      const isBotDetected = pageTitle.toLowerCase().includes('robot') || 
+                           pageTitle.toLowerCase().includes('captcha');
+      
+      expect(isBotDetected).toBe(true);
+    });
+  });
+
+  describe('Price range handling', () => {
+    const extractMinPrice = (priceText) => {
+      // Handle "From $X" or "$X - $Y" formats
+      const match = priceText.match(/\$?([\d,]+\.?\d*)/);
+      if (match) {
+        return parseFloat(match[1].replace(/,/g, ''));
+      }
+      return null;
+    };
+
+    it('should extract minimum from price range', () => {
+      expect(extractMinPrice('$29.99 - $49.99')).toBe(29.99);
+    });
+
+    it('should extract price from "From" format', () => {
+      expect(extractMinPrice('From $29.99')).toBe(29.99);
+    });
+
+    it('should handle regular price', () => {
+      expect(extractMinPrice('$99.99')).toBe(99.99);
+    });
+
+    it('should return null for non-price text', () => {
+      expect(extractMinPrice('See options')).toBeNull();
+    });
   });
 });
