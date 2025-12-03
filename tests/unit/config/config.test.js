@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 /**
  * Tests for config validation logic
- * Uses inline implementations to test validation patterns
+ * 
+ * Note: The inline implementations (validateConfigImpl, parseIntWithDefault, etc.)
+ * test the validation PATTERNS and logic, but don't contribute to code coverage.
+ * The actual coverage comes from tests using imported functions (see bottom of file).
  */
 
 // Inline implementation of validateConfig logic
@@ -333,7 +336,7 @@ describe('config', () => {
 });
 
 // Tests for actual exported functions
-import config, { validateConfig } from '../../../src/config/index.js';
+import config, { validateConfig, validateConfigOrExit } from '../../../src/config/index.js';
 
 describe('config (actual imports)', () => {
   describe('config default export', () => {
@@ -402,6 +405,45 @@ describe('config (actual imports)', () => {
       
       // In test environment, we should have valid config
       expect(result.valid).toBe(true);
+    });
+  });
+
+  describe('validateConfigOrExit', () => {
+    let exitSpy;
+    let consoleWarnSpy;
+    let consoleErrorSpy;
+    let consoleLogSpy;
+
+    beforeEach(() => {
+      exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {});
+      consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      exitSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should not exit when config is valid', () => {
+      // In test environment with valid config
+      validateConfigOrExit();
+      
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('should log success message when no warnings or errors', () => {
+      validateConfigOrExit();
+      
+      // Should log success if config is valid with no warnings
+      expect(consoleLogSpy).toHaveBeenCalledWith('✅ Configuration validated successfully');
+    });
+
+    it('should be a function', () => {
+      expect(typeof validateConfigOrExit).toBe('function');
     });
   });
 });
