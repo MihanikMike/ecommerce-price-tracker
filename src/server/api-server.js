@@ -5,11 +5,15 @@
 
 import http from 'http';
 import { URL } from 'url';
+import path from 'path';
+import fs from 'fs';
 import logger from '../utils/logger.js';
 import { pool } from '../db/connect-pg.js';
 import * as productRepo from '../db/productRepository.js';
 import * as trackedRepo from '../db/trackedProductsRepository.js';
 import * as priceChangeService from '../services/priceChangeService.js';
+import * as chartService from '../services/chartService.js';
+import * as cacheService from '../services/cacheService.js';
 import { getDatabaseStats } from '../services/retentionService.js';
 import config from '../config/index.js';
 
@@ -110,7 +114,8 @@ class Router {
                 route.paramNames.forEach((name, i) => {
                     params[name] = match[i + 1];
                 });
-                return await route.handler(req, res, params);
+                await route.handler(req, res, params);
+                return true;  // Handler was found and executed
             }
         }
         return false;
@@ -194,6 +199,12 @@ router.get('/products/:id', async (req, res, params) => {
             return sendError(res, 400, 'Invalid product ID');
         }
         
+        // Try cache first
+        const cached = await cacheService.getCachedProduct(productId);
+        if (cached) {
+            return sendJSON(res, 200, { ...cached, fromCache: true });
+        }
+        
         const result = await pool.query(`
             SELECT 
                 p.*,
@@ -218,10 +229,15 @@ router.get('/products/:id', async (req, res, params) => {
         // Get price summary
         const summary = await priceChangeService.getPriceSummary(productId);
         
-        sendJSON(res, 200, {
+        const response = {
             product: result.rows[0],
             priceSummary: summary,
-        });
+        };
+        
+        // Cache product data
+        await cacheService.cacheProduct(productId, response);
+        
+        sendJSON(res, 200, response);
     } catch (error) {
         logger.error({ error, productId: params.id }, 'API error: GET /products/:id');
         sendError(res, 500, 'Failed to fetch product', error.message);
@@ -241,6 +257,13 @@ router.get('/products/:id/history', async (req, res, params) => {
         const url = new URL(req.url, `http://${req.headers.host}`);
         const limit = Math.min(1000, Math.max(1, parseInt(url.searchParams.get('limit'), 10) || 100));
         const days = parseInt(url.searchParams.get('days'), 10) || null;
+        
+        // Try cache first
+        const cacheKey = `${cacheService.CACHE_KEYS.PRODUCT_HISTORY}:${productId}:${limit}:${days || 'all'}`;
+        const cached = await cacheService.get(cacheKey);
+        if (cached) {
+            return sendJSON(res, 200, { ...cached, fromCache: true });
+        }
         
         let query = `
             SELECT id, price, currency, captured_at
@@ -266,11 +289,16 @@ router.get('/products/:id/history', async (req, res, params) => {
             }
         }
         
-        sendJSON(res, 200, {
+        const response = {
             productId,
             history: result.rows,
             count: result.rows.length,
-        });
+        };
+        
+        // Cache price history (10 minute TTL)
+        await cacheService.set(cacheKey, response, 600);
+        
+        sendJSON(res, 200, response);
     } catch (error) {
         logger.error({ error, productId: params.id }, 'API error: GET /products/:id/history');
         sendError(res, 500, 'Failed to fetch price history', error.message);
@@ -303,6 +331,9 @@ router.delete('/products/:id', async (req, res, params) => {
             }
             
             await client.query('COMMIT');
+            
+            // Invalidate cache for this product
+            await cacheService.invalidateProduct(productId);
             
             logger.info({ productId }, 'Product deleted via API');
             sendJSON(res, 200, { success: true, productId });
@@ -446,6 +477,10 @@ router.post('/tracked', async (req, res, params) => {
         });
     } catch (error) {
         logger.error({ error }, 'API error: POST /tracked');
+        // Return 400 for validation errors
+        if (error.message && error.message.includes('Validation failed')) {
+            return sendError(res, 400, 'Invalid request', error.message);
+        }
         sendError(res, 500, 'Failed to add tracked product', error.message);
     }
 });
@@ -625,6 +660,13 @@ router.get('/price-changes/drops', async (req, res, params) => {
  */
 router.get('/stats', async (req, res, params) => {
     try {
+        // Try cache first
+        const cacheKey = cacheService.CACHE_KEYS.STATS;
+        const cached = await cacheService.get(cacheKey);
+        if (cached) {
+            return sendJSON(res, 200, { ...cached, fromCache: true });
+        }
+        
         const stats = await getDatabaseStats();
         
         // Add some extra stats
@@ -637,11 +679,16 @@ router.get('/stats', async (req, res, params) => {
             FROM tracked_products
         `);
         
-        sendJSON(res, 200, {
+        const response = {
             database: stats,
             tracking: trackedResult.rows[0],
             timestamp: new Date().toISOString(),
-        });
+        };
+        
+        // Cache for 5 minutes (stats don't change frequently)
+        await cacheService.set(cacheKey, response, 300);
+        
+        sendJSON(res, 200, response);
     } catch (error) {
         logger.error({ error }, 'API error: GET /stats');
         sendError(res, 500, 'Failed to fetch stats', error.message);
@@ -662,6 +709,187 @@ router.get('/stats/config', async (req, res, params) => {
         },
         version: process.env.npm_package_version || '1.0.0',
     });
+});
+
+// ============================================================
+// CACHE API
+// ============================================================
+
+/**
+ * GET /api/cache/stats - Get cache statistics
+ */
+router.get('/cache/stats', async (req, res, params) => {
+    try {
+        const stats = await cacheService.getStats();
+        sendJSON(res, 200, stats);
+    } catch (error) {
+        logger.error({ error }, 'API error: GET /cache/stats');
+        sendError(res, 500, 'Failed to fetch cache stats', error.message);
+    }
+});
+
+/**
+ * DELETE /api/cache - Clear all cache
+ */
+router.delete('/cache', async (req, res, params) => {
+    try {
+        await cacheService.flushAll();
+        logger.info('Cache cleared via API');
+        sendJSON(res, 200, { success: true, message: 'Cache cleared' });
+    } catch (error) {
+        logger.error({ error }, 'API error: DELETE /cache');
+        sendError(res, 500, 'Failed to clear cache', error.message);
+    }
+});
+
+/**
+ * DELETE /api/cache/product/:id - Clear cache for specific product
+ */
+router.delete('/cache/product/:id', async (req, res, params) => {
+    try {
+        const productId = parseInt(params.id, 10);
+        if (isNaN(productId)) {
+            return sendError(res, 400, 'Invalid product ID');
+        }
+        
+        await cacheService.invalidateProduct(productId);
+        logger.info({ productId }, 'Product cache cleared via API');
+        sendJSON(res, 200, { success: true, productId, message: 'Product cache cleared' });
+    } catch (error) {
+        logger.error({ error, productId: params.id }, 'API error: DELETE /cache/product/:id');
+        sendError(res, 500, 'Failed to clear product cache', error.message);
+    }
+});
+
+// ============================================================
+// CHARTS API
+// ============================================================
+
+/**
+ * GET /api/charts/products - List products available for charting
+ */
+router.get('/charts/products', async (req, res, params) => {
+    try {
+        const products = await chartService.getProductsForChartSelection();
+        sendJSON(res, 200, products);
+    } catch (error) {
+        logger.error({ error }, 'API error: GET /charts/products');
+        sendError(res, 500, 'Failed to fetch products for charts', error.message);
+    }
+});
+
+/**
+ * GET /api/charts/product/:id - Get chart data for a product
+ */
+router.get('/charts/product/:id', async (req, res, params) => {
+    try {
+        const productId = parseInt(params.id, 10);
+        if (isNaN(productId)) {
+            return sendError(res, 400, 'Invalid product ID');
+        }
+        
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const range = url.searchParams.get('range') || '30d';
+        
+        // Try cache first
+        const cached = await cacheService.getCachedChartData(productId, range);
+        if (cached) {
+            return sendJSON(res, 200, { ...cached, fromCache: true });
+        }
+        
+        const data = await chartService.getPriceChartData(productId, range);
+        
+        // Cache chart data
+        await cacheService.cacheChartData(productId, range, data);
+        
+        sendJSON(res, 200, data);
+    } catch (error) {
+        logger.error({ error, productId: params.id }, 'API error: GET /charts/product/:id');
+        sendError(res, 500, 'Failed to fetch chart data', error.message);
+    }
+});
+
+/**
+ * GET /api/charts/product/:id/info - Get product info for chart header
+ */
+router.get('/charts/product/:id/info', async (req, res, params) => {
+    try {
+        const productId = parseInt(params.id, 10);
+        if (isNaN(productId)) {
+            return sendError(res, 400, 'Invalid product ID');
+        }
+        
+        const info = await chartService.getProductChartInfo(productId);
+        if (!info) {
+            return sendError(res, 404, 'Product not found');
+        }
+        sendJSON(res, 200, info);
+    } catch (error) {
+        logger.error({ error, productId: params.id }, 'API error: GET /charts/product/:id/info');
+        sendError(res, 500, 'Failed to fetch product info', error.message);
+    }
+});
+
+/**
+ * GET /api/charts/product/:id/daily - Get daily aggregated chart data
+ */
+router.get('/charts/product/:id/daily', async (req, res, params) => {
+    try {
+        const productId = parseInt(params.id, 10);
+        if (isNaN(productId)) {
+            return sendError(res, 400, 'Invalid product ID');
+        }
+        
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const range = url.searchParams.get('range') || '90d';
+        
+        // Try cache first (use chart cache with 'daily' prefix)
+        const cached = await cacheService.getCachedChartData(productId, `daily_${range}`);
+        if (cached) {
+            return sendJSON(res, 200, { ...cached, fromCache: true });
+        }
+        
+        const data = await chartService.getDailyPriceChartData(productId, range);
+        
+        // Cache daily chart data
+        await cacheService.cacheChartData(productId, `daily_${range}`, data);
+        
+        sendJSON(res, 200, data);
+    } catch (error) {
+        logger.error({ error, productId: params.id }, 'API error: GET /charts/product/:id/daily');
+        sendError(res, 500, 'Failed to fetch daily chart data', error.message);
+    }
+});
+
+/**
+ * GET /api/charts/compare - Compare multiple products
+ */
+router.get('/charts/compare', async (req, res, params) => {
+    try {
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const idsParam = url.searchParams.get('ids');
+        const range = url.searchParams.get('range') || '30d';
+        
+        if (!idsParam) {
+            return sendError(res, 400, 'ids parameter is required (comma-separated product IDs)');
+        }
+        
+        const productIds = idsParam.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+        
+        if (productIds.length === 0) {
+            return sendError(res, 400, 'No valid product IDs provided');
+        }
+        
+        if (productIds.length > 10) {
+            return sendError(res, 400, 'Maximum 10 products can be compared at once');
+        }
+        
+        const data = await chartService.getComparisonChartData(productIds, range);
+        sendJSON(res, 200, data);
+    } catch (error) {
+        logger.error({ error }, 'API error: GET /charts/compare');
+        sendError(res, 500, 'Failed to fetch comparison data', error.message);
+    }
 });
 
 // ============================================================
@@ -706,12 +934,57 @@ router.post('/search', async (req, res, params) => {
 // API SERVER
 // ============================================================
 
+// Get the directory of the current module for static files
+const __dirname = path.dirname(new URL(import.meta.url).pathname);
+const PUBLIC_DIR = path.join(__dirname, '../../public');
+
+/**
+ * Serve static files from public directory
+ */
+function serveStaticFile(req, res, filePath) {
+    const fullPath = path.join(PUBLIC_DIR, filePath);
+    
+    // Security: prevent directory traversal
+    if (!fullPath.startsWith(PUBLIC_DIR)) {
+        sendError(res, 403, 'Forbidden');
+        return true;
+    }
+    
+    try {
+        if (!fs.existsSync(fullPath)) {
+            return false;
+        }
+        
+        const ext = path.extname(fullPath).toLowerCase();
+        const contentTypes = {
+            '.html': 'text/html',
+            '.css': 'text/css',
+            '.js': 'application/javascript',
+            '.json': 'application/json',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.svg': 'image/svg+xml',
+        };
+        
+        const contentType = contentTypes[ext] || 'application/octet-stream';
+        const content = fs.readFileSync(fullPath);
+        
+        res.setHeader('Content-Type', contentType);
+        res.writeHead(200);
+        res.end(content);
+        return true;
+    } catch (error) {
+        logger.error({ error, filePath }, 'Error serving static file');
+        return false;
+    }
+}
+
 /**
  * Handle API requests
  */
 async function handleRequest(req, res) {
     const url = new URL(req.url, `http://${req.headers.host}`);
-    const path = url.pathname;
+    const urlPath = url.pathname;
 
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -724,14 +997,31 @@ async function handleRequest(req, res) {
         res.end();
         return;
     }
+    
+    // Serve static files (chart.html, etc.)
+    if (urlPath === '/chart.html' || urlPath === '/chart' || urlPath === '/charts') {
+        if (serveStaticFile(req, res, 'chart.html')) return;
+    }
+    
+    // Serve favicon or other static assets
+    if (urlPath.startsWith('/static/') || urlPath === '/favicon.ico') {
+        const staticPath = urlPath.startsWith('/static/') ? urlPath.slice(8) : urlPath;
+        if (serveStaticFile(req, res, staticPath)) return;
+    }
 
     // Only handle /api routes
-    if (!path.startsWith(API_PREFIX)) {
-        sendError(res, 404, 'Not Found', 'API routes start with /api');
+    if (!urlPath.startsWith(API_PREFIX)) {
+        // Redirect root to API docs
+        if (urlPath === '/' || urlPath === '') {
+            res.writeHead(302, { Location: '/api' });
+            res.end();
+            return;
+        }
+        sendError(res, 404, 'Not Found', 'API routes start with /api, charts at /chart.html');
         return;
     }
 
-    const apiPath = path.slice(API_PREFIX.length) || '/';
+    const apiPath = urlPath.slice(API_PREFIX.length) || '/';
 
     try {
         // Try to route the request
@@ -763,6 +1053,18 @@ async function handleRequest(req, res) {
                             'GET /api/price-changes': 'Get recent price changes',
                             'GET /api/price-changes/drops': 'Get biggest price drops',
                         },
+                        charts: {
+                            'GET /api/charts/products': 'List products for chart selection',
+                            'GET /api/charts/product/:id': 'Get price chart data (range: 24h,7d,30d,90d,1y,all)',
+                            'GET /api/charts/product/:id/info': 'Get product info for chart header',
+                            'GET /api/charts/product/:id/daily': 'Get daily aggregated chart data',
+                            'GET /api/charts/compare?ids=1,2,3': 'Compare multiple products',
+                        },
+                        cache: {
+                            'GET /api/cache/stats': 'Get cache statistics',
+                            'DELETE /api/cache': 'Clear all cache',
+                            'DELETE /api/cache/product/:id': 'Clear cache for specific product',
+                        },
                         stats: {
                             'GET /api/stats': 'Get database statistics',
                             'GET /api/stats/config': 'Get current configuration',
@@ -771,6 +1073,7 @@ async function handleRequest(req, res) {
                             'POST /api/search': 'Search for products',
                         },
                     },
+                    chartUI: '/chart.html?id=1',
                     documentation: 'https://github.com/MihanikMike/ecommerce-price-tracker',
                 });
             } else {
@@ -779,7 +1082,9 @@ async function handleRequest(req, res) {
         }
     } catch (error) {
         logger.error({ error, path: apiPath, method: req.method }, 'API request error');
-        sendError(res, 500, 'Internal Server Error', error.message);
+        if (!res.headersSent) {
+            sendError(res, 500, 'Internal Server Error', error.message);
+        }
     }
 }
 
@@ -800,13 +1105,15 @@ export async function startApiServer(port = DEFAULT_PORT) {
         });
 
         server.listen(port, () => {
-            logger.info({ port }, 'API server started');
+            // Get the actual port (important when port 0 is passed for random port)
+            const actualPort = server.address().port;
+            logger.info({ port: actualPort }, 'API server started');
             logger.info({ 
-                docs: `http://localhost:${port}/api`,
-                products: `http://localhost:${port}/api/products`,
-                tracked: `http://localhost:${port}/api/tracked`,
+                docs: `http://localhost:${actualPort}/api`,
+                products: `http://localhost:${actualPort}/api/products`,
+                tracked: `http://localhost:${actualPort}/api/tracked`,
             }, 'API endpoints available');
-            resolve(port);
+            resolve(actualPort);
         });
     });
 }

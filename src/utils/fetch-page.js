@@ -6,6 +6,12 @@ import logger from "./logger.js";
 /** Maximum retries with different proxies */
 const MAX_PROXY_RETRIES = 3;
 
+/** Timeout for proxy connections (faster fail) */
+const PROXY_TIMEOUT = 15000;
+
+/** Timeout for direct connections (more patient) */
+const DIRECT_TIMEOUT = 30000;
+
 /**
  * Try to fetch with a specific configuration (proxy or direct)
  * @private
@@ -13,6 +19,7 @@ const MAX_PROXY_RETRIES = 3;
 async function tryFetch(url, options, proxy = null) {
     const userAgent = randomUA();
     const browser = await browserPool.acquire();
+    const timeout = proxy ? PROXY_TIMEOUT : DIRECT_TIMEOUT;
     
     try {
         const context = await browser.newContext({
@@ -30,11 +37,11 @@ async function tryFetch(url, options, proxy = null) {
             await page.waitForTimeout(Math.floor(Math.random() * 500 + 500));
         }
 
-        // Navigate to page
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        // Navigate to page (use shorter timeout for proxies)
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
 
         // Wait for body to be ready
-        await page.waitForSelector('body', { timeout: 15000 });
+        await page.waitForSelector('body', { timeout: 10000 });
 
         return { page, context, browser, proxyUsed: proxy };
     } catch (error) {

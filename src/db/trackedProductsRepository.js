@@ -13,6 +13,8 @@ export async function getProductsToCheck(limit = 100) {
             SELECT id, url, site, check_interval_minutes, last_checked_at
             FROM tracked_products 
             WHERE enabled = true 
+            AND url IS NOT NULL
+            AND tracking_mode = 'url'
             AND (next_check_at IS NULL OR next_check_at <= NOW())
             ORDER BY last_checked_at ASC NULLS FIRST
             LIMIT $1
@@ -94,10 +96,10 @@ export async function addTrackedProduct({ url, site, enabled = true, checkInterv
     
     try {
         const result = await pool.query(
-            `INSERT INTO tracked_products (url, site, enabled, check_interval_minutes)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT (url) DO UPDATE 
-             SET enabled = $3, check_interval_minutes = $4, updated_at = NOW()
+            `INSERT INTO tracked_products (url, site, enabled, check_interval_minutes, tracking_mode)
+             VALUES ($1, $2, $3, $4, 'url')
+             ON CONFLICT (url) WHERE url IS NOT NULL DO UPDATE 
+             SET enabled = EXCLUDED.enabled, check_interval_minutes = EXCLUDED.check_interval_minutes, updated_at = NOW()
              RETURNING id`,
             [data.url, data.site, data.enabled, data.checkIntervalMinutes]
         );

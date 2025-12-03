@@ -21,27 +21,44 @@ export async function upsertProductAndHistory({ url, site, title, price, currenc
     try {
         await client.query('BEGIN');
         
-        // Insert or update product
+        // Insert or update product (including current price)
         const productResult = await client.query(
-            `INSERT INTO products (url, site, title, last_seen_at) 
-             VALUES ($1, $2, $3, NOW())
+            `INSERT INTO products (url, site, title, price, last_seen_at) 
+             VALUES ($1, $2, $3, $4, NOW())
              ON CONFLICT (url) 
              DO UPDATE SET 
                 title = EXCLUDED.title,
                 site = EXCLUDED.site,
+                price = EXCLUDED.price,
                 last_seen_at = NOW()
              RETURNING id`,
-            [data.url, data.site, data.title]
+            [data.url, data.site, data.title, data.price]
         );
         
         const productId = productResult.rows[0].id;
         
-        // Insert price history
-        await client.query(
-            `INSERT INTO price_history (product_id, price, currency, captured_at) 
-             VALUES ($1, $2, $3, NOW())`,
-            [productId, data.price, data.currency]
+        // Check if we already have a price entry within the last 5 minutes with the same price
+        // This prevents duplicate entries from retries or rapid successive calls
+        const recentPriceCheck = await client.query(
+            `SELECT id FROM price_history 
+             WHERE product_id = $1 
+               AND price = $2 
+               AND captured_at > NOW() - INTERVAL '5 minutes'
+             LIMIT 1`,
+            [productId, data.price]
         );
+        
+        // Only insert price history if no recent duplicate exists
+        if (recentPriceCheck.rows.length === 0) {
+            await client.query(
+                `INSERT INTO price_history (product_id, price, currency, captured_at) 
+                 VALUES ($1, $2, $3, NOW())`,
+                [productId, data.price, data.currency]
+            );
+            logger.debug({ productId, url: data.url, price: data.price }, 'Price history entry added');
+        } else {
+            logger.debug({ productId, url: data.url, price: data.price }, 'Skipped duplicate price entry (same price within 5 min)');
+        }
         
         await client.query('COMMIT');
         

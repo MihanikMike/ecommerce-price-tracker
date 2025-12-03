@@ -1,4 +1,5 @@
 import logger from "../utils/logger.js";
+import { delay } from "../utils/delay.js";
 import { scrapeAmazon } from "../scraper/amazon.js";
 import { scrapeBurton } from "../scraper/burton.js";
 import { upsertProductAndHistory, getAllProductsWithLatestPrice } from "../db/productRepository.js";
@@ -9,6 +10,15 @@ import { retry } from "../utils/retry.js";
 import { rateLimiter } from "../utils/rate-limiter.js";
 import { recordScrapeAttempt, recordError } from "../server/health-server.js";
 import { recordScrape, recordRateLimitDelay, lastSuccessfulRun, monitoringCycleDuration } from "../utils/metrics.js";
+import { 
+    recordSiteError, 
+    recordSiteSuccess, 
+    isSiteInCooldown, 
+    shouldRetry as shouldRetryError,
+    getErrorSummary,
+    getAllSiteHealth,
+} from "../utils/site-error-handler.js";
+import { browserPool } from "../utils/BrowserPool.js";
 import config from "../config/index.js";
 
 /**
@@ -41,6 +51,18 @@ async function scrapeProductWithRetry(url) {
         return null;
     }
 
+    // Check if site is in cooldown (from previous critical errors)
+    const cooldown = isSiteInCooldown(url);
+    if (cooldown.inCooldown) {
+        logger.warn({ 
+            url, 
+            site: scraperInfo.name,
+            remainingMs: cooldown.remainingMs,
+            reason: cooldown.reason,
+        }, 'Site is in cooldown, skipping');
+        return null;
+    }
+
     // Wait for rate limit before making request
     const delayApplied = await rateLimiter.waitForRateLimit(url);
     logger.debug({ url, delayMs: delayApplied, site: scraperInfo.name }, 'Rate limit delay applied');
@@ -59,14 +81,22 @@ async function scrapeProductWithRetry(url) {
                 retries: config.scraper.retries,
                 minDelay: config.scraper.minDelay,
                 maxDelay: config.scraper.maxDelay,
+                shouldRetry: (error) => {
+                    const retryDecision = shouldRetryError(error, url);
+                    if (!retryDecision.shouldRetry) {
+                        logger.debug({ url, reason: retryDecision.reason }, 'Error not retryable');
+                    }
+                    return retryDecision.shouldRetry;
+                },
             }
         );
 
         const durationSeconds = (Date.now() - startTime) / 1000;
 
-        // Report success to rate limiter
+        // Report success to rate limiter and site health
         if (data) {
             rateLimiter.reportSuccess(url);
+            recordSiteSuccess(url);
             recordScrapeAttempt(true);
             recordScrape(site, true, durationSeconds);
         } else {
@@ -79,12 +109,25 @@ async function scrapeProductWithRetry(url) {
     } catch (error) {
         const durationSeconds = (Date.now() - startTime) / 1000;
         
+        // Classify and record the error
+        const errorSummary = getErrorSummary(error, url);
+        recordSiteError(url, error);
+        
         // Report error to rate limiter (may increase backoff)
         rateLimiter.reportError(url, error);
         recordScrapeAttempt(false);
         recordError(error);
         recordScrape(site, false, durationSeconds);
-        logger.error({ error, url, scraper: scraperInfo.name }, 'Failed to scrape product after retries');
+        
+        logger.error({ 
+            error: error.message,
+            url, 
+            scraper: scraperInfo.name,
+            errorCategory: errorSummary.category,
+            errorSeverity: errorSummary.severity,
+            recommendation: errorSummary.action,
+        }, 'Failed to scrape product after retries');
+        
         return null;
     }
 }
@@ -187,7 +230,11 @@ export async function runPriceMonitor() {
             await delay(delayMs);
             
         } catch (error) {
-            logger.error({ error, url: trackedProduct.url }, 'Unexpected error processing product');
+            logger.error({ 
+                error: error.message || String(error),
+                stack: error.stack,
+                url: trackedProduct.url 
+            }, 'Unexpected error processing product');
             results.failed++;
             consecutiveFailures++;
             
@@ -217,7 +264,37 @@ export async function runPriceMonitor() {
         lastSuccessfulRun.set(Date.now() / 1000);
     }
     
+    // Log site health summary
+    const siteHealth = getAllSiteHealth();
+    if (Object.keys(siteHealth).length > 0) {
+        logger.info({ siteHealth }, 'Site health status after monitoring cycle');
+    }
+    
     logger.info({ results, durationMs: duration }, 'Price monitoring cycle completed');
 
     return results;
+}
+
+// Run if called directly
+if (process.argv[1] && process.argv[1].includes('price-monitor.js')) {
+    (async () => {
+        try {
+            // Initialize browser pool
+            logger.info('Initializing browser pool...');
+            await browserPool.initialize();
+            logger.info('Browser pool ready');
+            
+            // Run monitor
+            const results = await runPriceMonitor();
+            logger.info({ results }, 'Price monitor completed');
+            
+            // Cleanup
+            await browserPool.closeAll();
+            process.exit(0);
+        } catch (error) {
+            logger.error({ error }, 'Price monitor failed');
+            await browserPool.closeAll();
+            process.exit(1);
+        }
+    })();
 }

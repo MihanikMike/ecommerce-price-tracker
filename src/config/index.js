@@ -7,6 +7,8 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+const isTestEnv = process.env.NODE_ENV === 'test';
+
 const config = {
   // Application
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -16,13 +18,13 @@ const config = {
   healthPort: parseInt(process.env.HEALTH_PORT, 10) || 3000,
   apiPort: parseInt(process.env.API_PORT, 10) || 3001,
   
-  // PostgreSQL
+  // PostgreSQL - use test database when NODE_ENV=test
   pg: {
-    host: process.env.PG_HOST || 'localhost',
-    port: parseInt(process.env.PG_PORT, 10) || 5432,
-    user: process.env.PG_USER,
-    password: process.env.PG_PASSWORD,
-    database: process.env.PG_DATABASE,
+    host: isTestEnv ? (process.env.TEST_PG_HOST || 'localhost') : (process.env.PG_HOST || 'localhost'),
+    port: parseInt(isTestEnv ? (process.env.TEST_PG_PORT || '5432') : (process.env.PG_PORT || '5432'), 10),
+    user: isTestEnv ? process.env.TEST_PG_USER : process.env.PG_USER,
+    password: isTestEnv ? process.env.TEST_PG_PASSWORD : process.env.PG_PASSWORD,
+    database: isTestEnv ? process.env.TEST_PG_DATABASE : process.env.PG_DATABASE,
     max: parseInt(process.env.PG_POOL_MAX, 10) || 20,
     idleTimeoutMillis: parseInt(process.env.PG_IDLE_TIMEOUT, 10) || 30000,
     connectionTimeoutMillis: parseInt(process.env.PG_CONNECTION_TIMEOUT, 10) || 10000,
@@ -36,6 +38,36 @@ const config = {
     timeout: parseInt(process.env.SCRAPER_TIMEOUT, 10) || 30000,
     headless: process.env.SCRAPER_HEADLESS !== 'false',
     useProxy: process.env.SCRAPER_USE_PROXY === 'true',
+  },
+  
+  // Search Engine Configuration
+  // All search engines are FREE and use browser-based scraping (no API keys needed)
+  search: {
+    // Search engine priority order (all use free browser-based scraping)
+    engines: (process.env.SEARCH_ENGINES || 'duckduckgo,google,bing').split(',').map(e => e.trim()),
+    
+    // Search behavior
+    maxResults: parseInt(process.env.SEARCH_MAX_RESULTS, 10) || 10,
+    timeout: parseInt(process.env.SEARCH_TIMEOUT, 10) || 30000,
+    retries: parseInt(process.env.SEARCH_RETRIES, 10) || 3,
+    
+    // Notes:
+    // - DuckDuckGo: Most reliable, uses HTML version with minimal bot detection
+    // - Google: May show CAPTCHA under heavy use - best as fallback
+    // - Bing: May show CAPTCHA under heavy use - best as fallback
+    // All engines use Playwright browser automation for scraping
+  },
+  
+  // Email Configuration (for price alerts)
+  email: {
+    enabled: process.env.EMAIL_ENABLED === 'true',
+    provider: process.env.EMAIL_PROVIDER || 'smtp', // smtp, gmail, sendgrid, ses, mailgun
+    from: process.env.EMAIL_FROM || 'price-tracker@localhost',
+    fromName: process.env.EMAIL_FROM_NAME || 'Price Tracker',
+    // Recipients for price alerts (comma-separated)
+    alertRecipients: process.env.PRICE_ALERT_EMAIL_RECIPIENTS 
+      ? process.env.PRICE_ALERT_EMAIL_RECIPIENTS.split(',').map(e => e.trim())
+      : [],
   },
   
   // Logging
@@ -83,6 +115,25 @@ const config = {
     deleteBatchSize: parseInt(process.env.RETENTION_DELETE_BATCH_SIZE, 10) || 1000,
     // Keep daily price samples for historical analysis
     keepDailySamples: process.env.RETENTION_KEEP_DAILY_SAMPLES !== 'false',
+  },
+
+  // Cache Configuration (Redis)
+  cache: {
+    enabled: process.env.CACHE_ENABLED === 'true',
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.REDIS_DB, 10) || 0,
+    keyPrefix: process.env.REDIS_KEY_PREFIX || 'pt:',
+    // TTL settings (in seconds)
+    ttl: {
+      product: parseInt(process.env.CACHE_TTL_PRODUCT, 10) || 300,         // 5 minutes
+      productList: parseInt(process.env.CACHE_TTL_PRODUCT_LIST, 10) || 60, // 1 minute
+      priceHistory: parseInt(process.env.CACHE_TTL_PRICE_HISTORY, 10) || 120, // 2 minutes
+      chartData: parseInt(process.env.CACHE_TTL_CHART, 10) || 180,         // 3 minutes
+      searchResults: parseInt(process.env.CACHE_TTL_SEARCH, 10) || 600,    // 10 minutes
+      stats: parseInt(process.env.CACHE_TTL_STATS, 10) || 30,              // 30 seconds
+    },
   },
 };
 
