@@ -26,15 +26,21 @@ export function useProduct(id) {
 }
 
 /**
- * Hook to delete a product
+ * Hook to delete a product with optional callbacks for toast notifications
  */
-export function useDeleteProduct() {
+export function useDeleteProduct(options = {}) {
   const queryClient = useQueryClient();
+  const { onSuccess, onError } = options;
   
   return useMutation({
     mutationFn: (id) => api.deleteProduct(id),
-    onSuccess: () => {
+    onSuccess: (data, id) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      onSuccess?.(data, id);
+    },
+    onError: (error) => {
+      onError?.(error);
     },
   });
 }
+

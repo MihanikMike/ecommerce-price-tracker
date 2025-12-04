@@ -17,5 +17,19 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React and router - loaded on every page
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // Data management
+          'vendor-query': ['@tanstack/react-query'],
+          // UI libraries
+          'vendor-ui': ['framer-motion', 'clsx', 'lucide-react'],
+          // Chart library - only loaded when needed
+          'vendor-chart': ['chart.js', 'react-chartjs-2'],
+        },
+      },
+    },
   },
 })

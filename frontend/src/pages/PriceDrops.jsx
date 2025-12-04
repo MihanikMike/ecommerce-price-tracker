@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import clsx from 'clsx';
@@ -7,15 +7,16 @@ import {
   Filter,
   Clock,
   Flame,
-  Percent,
   ExternalLink,
-  Package
+  Package,
+  RefreshCw,
+  SlidersHorizontal
 } from 'lucide-react';
 import { Card, Button, CardSkeleton } from '../components/common';
-import { Select } from '../components/common/Input';
+import { Select, SearchInput } from '../components/common/Input';
 import { PriceChangeBadge, SiteBadge } from '../components/common/Badge';
 import { usePriceChanges } from '../hooks/usePriceChanges';
-import { formatPrice, formatRelativeTime, truncate } from '../utils/formatters';
+import { formatPrice, formatRelativeTime } from '../utils/formatters';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -156,21 +157,52 @@ export default function PriceDrops() {
   const [timeRange, setTimeRange] = useState('24');
   const [minDrop, setMinDrop] = useState('5');
   const [sortBy, setSortBy] = useState('drop');
+  const [siteFilter, setSiteFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const { data, isLoading } = usePriceChanges(parseInt(timeRange), parseInt(minDrop), 50);
-  const drops = data?.data || [];
+  const { data, isLoading, refetch, isFetching } = usePriceChanges(parseInt(timeRange), parseInt(minDrop), 100);
+  const rawDrops = data?.data || [];
 
-  // Sample data for demo
-  const sampleDrops = [
-    { id: 1, productId: 1, title: 'Sony WH-1000XM5 Wireless Noise Canceling Headphones', site: 'amazon', currentPrice: 279.99, previousPrice: 349.99, percentChange: -20, detectedAt: new Date(Date.now() - 3600000) },
-    { id: 2, productId: 2, title: 'Burton Custom Flying V Snowboard 2024', site: 'burton', currentPrice: 449.95, previousPrice: 549.95, percentChange: -18.2, detectedAt: new Date(Date.now() - 7200000) },
-    { id: 3, productId: 3, title: 'Apple AirPods Pro (2nd Generation)', site: 'amazon', currentPrice: 189.99, previousPrice: 249.99, percentChange: -24, detectedAt: new Date(Date.now() - 10800000) },
-    { id: 4, productId: 4, title: 'Samsung 65" OLED 4K Smart TV', site: 'amazon', currentPrice: 1299.99, previousPrice: 1499.99, percentChange: -13.3, detectedAt: new Date(Date.now() - 14400000) },
-    { id: 5, productId: 5, title: 'Burton Step On Bindings', site: 'burton', currentPrice: 319.95, previousPrice: 369.95, percentChange: -13.5, detectedAt: new Date(Date.now() - 18000000) },
-    { id: 6, productId: 6, title: 'Dyson V15 Detect Vacuum', site: 'amazon', currentPrice: 549.99, previousPrice: 649.99, percentChange: -15.4, detectedAt: new Date(Date.now() - 21600000) },
-  ];
-
-  const displayDrops = drops.length > 0 ? drops : sampleDrops;
+  // Apply client-side filtering and sorting
+  const displayDrops = useMemo(() => {
+    let filtered = [...rawDrops];
+    
+    // Filter by site
+    if (siteFilter) {
+      filtered = filtered.filter(drop => drop.site === siteFilter);
+    }
+    
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(drop => 
+        drop.title?.toLowerCase().includes(query)
+      );
+    }
+    
+    // Sort
+    switch (sortBy) {
+      case 'drop':
+        filtered.sort((a, b) => Math.abs(b.percentChange || 0) - Math.abs(a.percentChange || 0));
+        break;
+      case 'recent':
+        filtered.sort((a, b) => new Date(b.detectedAt) - new Date(a.detectedAt));
+        break;
+      case 'price':
+        filtered.sort((a, b) => (a.currentPrice || 0) - (b.currentPrice || 0));
+        break;
+      case 'savings':
+        filtered.sort((a, b) => 
+          ((b.previousPrice || 0) - (b.currentPrice || 0)) - 
+          ((a.previousPrice || 0) - (a.currentPrice || 0))
+        );
+        break;
+      default:
+        break;
+    }
+    
+    return filtered;
+  }, [rawDrops, siteFilter, searchQuery, sortBy]);
 
   const timeOptions = [
     { value: '24', label: 'Last 24 Hours' },
@@ -187,10 +219,32 @@ export default function PriceDrops() {
   ];
 
   const sortOptions = [
-    { value: 'drop', label: 'Biggest Drop' },
+    { value: 'drop', label: 'Biggest Drop %' },
+    { value: 'savings', label: 'Most Savings' },
     { value: 'recent', label: 'Most Recent' },
     { value: 'price', label: 'Lowest Price' },
   ];
+
+  const siteOptions = [
+    { value: '', label: 'All Sites' },
+    { value: 'amazon', label: 'Amazon' },
+    { value: 'burton', label: 'Burton' },
+  ];
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    if (displayDrops.length === 0) return null;
+    
+    const totalSavings = displayDrops.reduce((sum, drop) => 
+      sum + ((drop.previousPrice || 0) - (drop.currentPrice || 0)), 0
+    );
+    const avgDrop = displayDrops.reduce((sum, drop) => 
+      sum + Math.abs(drop.percentChange || 0), 0
+    ) / displayDrops.length;
+    const hotDeals = displayDrops.filter(d => Math.abs(d.percentChange || 0) >= 20).length;
+    
+    return { totalSavings, avgDrop, hotDeals };
+  }, [displayDrops]);
 
   return (
     <motion.div 
@@ -210,34 +264,97 @@ export default function PriceDrops() {
             {displayDrops.length} deals found in the selected period
           </p>
         </div>
+        <Button 
+          variant="secondary" 
+          onClick={() => refetch()}
+          loading={isFetching}
+          icon={RefreshCw}
+        >
+          Refresh
+        </Button>
       </motion.div>
+
+      {/* Stats Summary */}
+      {stats && displayDrops.length > 0 && (
+        <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card padding={false} className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                <TrendingDown className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Total Potential Savings</p>
+                <p className="text-lg font-bold text-emerald-400">{formatPrice(stats.totalSavings)}</p>
+              </div>
+            </div>
+          </Card>
+          <Card padding={false} className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+                <SlidersHorizontal className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Average Drop</p>
+                <p className="text-lg font-bold text-white">{stats.avgDrop.toFixed(1)}%</p>
+              </div>
+            </div>
+          </Card>
+          <Card padding={false} className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400">
+                <Flame className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Hot Deals (20%+)</p>
+                <p className="text-lg font-bold text-white">{stats.hotDeals}</p>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Filters */}
       <motion.div variants={itemVariants}>
         <Card padding={false}>
-          <div className="p-4 flex flex-wrap gap-4 items-center">
+          <div className="p-4 space-y-4">
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <Filter className="h-4 w-4" />
-              Filters:
+              Filters
             </div>
-            <Select
-              options={timeOptions}
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-              className="w-40"
-            />
-            <Select
-              options={dropOptions}
-              value={minDrop}
-              onChange={(e) => setMinDrop(e.target.value)}
-              className="w-32"
-            />
-            <Select
-              options={sortOptions}
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-36"
-            />
+            <div className="flex flex-col sm:flex-row gap-4">
+              <SearchInput
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search products..."
+                className="flex-1 sm:max-w-xs"
+              />
+              <div className="flex flex-wrap gap-3">
+                <Select
+                  options={timeOptions}
+                  value={timeRange}
+                  onChange={(e) => setTimeRange(e.target.value)}
+                  className="w-40"
+                />
+                <Select
+                  options={dropOptions}
+                  value={minDrop}
+                  onChange={(e) => setMinDrop(e.target.value)}
+                  className="w-32"
+                />
+                <Select
+                  options={siteOptions}
+                  value={siteFilter}
+                  onChange={(e) => setSiteFilter(e.target.value)}
+                  className="w-32"
+                />
+                <Select
+                  options={sortOptions}
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+            </div>
           </div>
         </Card>
       </motion.div>

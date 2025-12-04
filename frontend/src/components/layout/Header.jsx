@@ -3,8 +3,9 @@ import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Bell, Search, RefreshCw, Command, X, Sun, Moon } from 'lucide-react';
+import { Bell, Search, RefreshCw, Command, X, Sun, Moon, Menu } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useSidebar } from './Layout';
 
 const pageTitle = {
   '/': 'Dashboard',
@@ -20,6 +21,7 @@ export default function Header() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const { theme, toggleTheme, isDark } = useTheme();
+  const { toggleSidebar } = useSidebar();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,15 +41,32 @@ export default function Header() {
         'sticky top-0 z-30 h-16',
         'bg-slate-900/80 dark:bg-slate-900/80 backdrop-blur-xl',
         'border-b border-slate-800/50',
-        'flex items-center justify-between px-6'
+        'flex items-center justify-between px-4 sm:px-6'
       )}>
-        {/* Left: Page Title */}
-        <div className="flex items-center gap-4">
+        {/* Left: Mobile Menu + Page Title */}
+        <div className="flex items-center gap-3">
+          {/* Mobile menu button */}
+          <motion.button
+            onClick={toggleSidebar}
+            className={clsx(
+              'lg:hidden p-2 rounded-xl',
+              'bg-slate-800/50 hover:bg-slate-800',
+              'border border-slate-700/50 hover:border-slate-600/50',
+              'text-slate-400 hover:text-white',
+              'transition-all duration-200'
+            )}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </motion.button>
+
           <motion.h1 
             key={currentTitle}
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-xl font-semibold text-[var(--text-primary)]"
+            className="text-lg sm:text-xl font-semibold text-[var(--text-primary)]"
           >
             {currentTitle}
           </motion.h1>
@@ -59,7 +78,7 @@ export default function Header() {
           <motion.button
             onClick={() => setIsSearchOpen(true)}
             className={clsx(
-              'flex items-center gap-2 px-3 py-2',
+              'flex items-center gap-2 px-2 sm:px-3 py-2',
               'bg-slate-800/50 hover:bg-slate-800',
               'border border-slate-700/50 hover:border-slate-600/50',
               'rounded-xl text-slate-400 hover:text-white',
@@ -71,7 +90,7 @@ export default function Header() {
             <Search className="h-4 w-4" />
             <span className="text-sm hidden sm:inline">Search</span>
             <kbd className={clsx(
-              'hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5',
+              'hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5',
               'bg-slate-700/50 rounded text-[10px] text-slate-500'
             )}>
               <Command className="h-2.5 w-2.5" />K

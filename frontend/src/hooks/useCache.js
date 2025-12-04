@@ -2,10 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 
 /**
- * Hook to fetch and manage cache stats
+ * Hook to fetch and manage cache stats with optional callbacks for toast notifications
  */
-export function useCache() {
+export function useCache(options = {}) {
   const queryClient = useQueryClient();
+  const { onClearSuccess, onClearError } = options;
 
   const query = useQuery({
     queryKey: ['cacheStats'],
@@ -15,8 +16,12 @@ export function useCache() {
 
   const clearMutation = useMutation({
     mutationFn: api.clearCache,
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['cacheStats'] });
+      onClearSuccess?.(data);
+    },
+    onError: (error) => {
+      onClearError?.(error);
     },
   });
 
@@ -26,3 +31,4 @@ export function useCache() {
     isClearing: clearMutation.isPending,
   };
 }
+

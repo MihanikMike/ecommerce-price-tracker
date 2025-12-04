@@ -14,43 +14,59 @@ export function useTracked(page = 1, limit = 20, mode = null, enabled = null) {
 }
 
 /**
- * Hook to add a tracked product
+ * Hook to add a tracked product with optional callbacks for toast notifications
  */
-export function useAddTracked() {
+export function useAddTracked(options = {}) {
   const queryClient = useQueryClient();
+  const { onSuccess, onError } = options;
   
   return useMutation({
     mutationFn: (data) => api.addTracked(data),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tracked'] });
+      onSuccess?.(data);
+    },
+    onError: (error) => {
+      onError?.(error);
     },
   });
 }
 
 /**
- * Hook to update a tracked product
+ * Hook to update a tracked product with optional callbacks for toast notifications
  */
-export function useUpdateTracked() {
+export function useUpdateTracked(options = {}) {
   const queryClient = useQueryClient();
+  const { onSuccess, onError } = options;
   
   return useMutation({
     mutationFn: ({ id, data }) => api.updateTracked(id, data),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tracked'] });
+      onSuccess?.(data);
+    },
+    onError: (error) => {
+      onError?.(error);
     },
   });
 }
 
 /**
- * Hook to delete a tracked product
+ * Hook to delete a tracked product with optional callbacks for toast notifications
  */
-export function useDeleteTracked() {
+export function useDeleteTracked(options = {}) {
   const queryClient = useQueryClient();
+  const { onSuccess, onError } = options;
   
   return useMutation({
     mutationFn: (id) => api.deleteTracked(id),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tracked'] });
+      onSuccess?.(data);
+    },
+    onError: (error) => {
+      onError?.(error);
     },
   });
 }
+

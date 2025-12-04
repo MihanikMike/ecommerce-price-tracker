@@ -11,7 +11,9 @@ import {
   Settings,
   BarChart3,
   ChevronRight,
+  X,
 } from 'lucide-react';
+import { useSidebar } from './Layout';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -41,23 +43,31 @@ const itemVariants = {
   visible: { x: 0, opacity: 1 }
 };
 
+const mobileBackdropVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 }
+};
+
+const mobileSidebarVariants = {
+  hidden: { x: '-100%' },
+  visible: { x: 0, transition: { type: 'spring', damping: 25, stiffness: 300 } }
+};
+
 export default function Sidebar() {
   const location = useLocation();
+  const { isSidebarOpen, closeSidebar } = useSidebar();
 
-  return (
-    <motion.aside 
-      className={clsx(
-        'fixed left-0 top-0 h-full w-64',
-        'bg-[var(--bg-secondary)]/95 backdrop-blur-xl',
-        'border-r border-slate-800/50',
-        'flex flex-col z-40'
-      )}
-      initial="hidden"
-      animate="visible"
-      variants={sidebarVariants}
-    >
+  const handleNavClick = () => {
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 1024) {
+      closeSidebar();
+    }
+  };
+
+  const SidebarContent = () => (
+    <>
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-800/50">
+      <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800/50">
         <motion.div 
           className="flex items-center gap-3"
           whileHover={{ scale: 1.02 }}
@@ -76,10 +86,19 @@ export default function Sidebar() {
             </div>
           </div>
         </motion.div>
+        
+        {/* Close button - mobile only */}
+        <button
+          onClick={closeSidebar}
+          className="lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors"
+          aria-label="Close menu"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto" aria-label="Main navigation">
         {navigation.map((item) => {
           const isActive = location.pathname === item.href || 
             (item.href !== '/' && location.pathname.startsWith(item.href));
@@ -88,6 +107,8 @@ export default function Sidebar() {
             <motion.div key={item.name} variants={itemVariants}>
               <NavLink
                 to={item.href}
+                onClick={handleNavClick}
+                aria-current={isActive ? 'page' : undefined}
                 className={clsx(
                   'group relative flex items-center px-3 py-2.5 rounded-xl',
                   'transition-all duration-200',
@@ -171,6 +192,57 @@ export default function Sidebar() {
           Price Tracker v1.0.0
         </div>
       </div>
-    </motion.aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar - always visible on lg+ */}
+      <aside 
+        className={clsx(
+          'fixed left-0 top-0 h-full w-64',
+          'bg-[var(--bg-secondary)]/95 backdrop-blur-xl',
+          'border-r border-slate-800/50',
+          'flex-col z-40',
+          'hidden lg:flex'
+        )}
+      >
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile Sidebar - overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+              variants={mobileBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              onClick={closeSidebar}
+              aria-hidden="true"
+            />
+            
+            {/* Mobile Sidebar */}
+            <motion.aside
+              className={clsx(
+                'fixed left-0 top-0 h-full w-64',
+                'bg-[var(--bg-secondary)] backdrop-blur-xl',
+                'border-r border-slate-800/50',
+                'flex flex-col z-50 lg:hidden'
+              )}
+              variants={mobileSidebarVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+            >
+              <SidebarContent />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

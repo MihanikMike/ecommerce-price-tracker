@@ -96,6 +96,8 @@ const Button = forwardRef(function Button({
       whileTap={{ scale: disabled ? 1 : 0.98 }}
       className={clsx(baseStyles, variants[variant], sizes[size], className)}
       disabled={disabled || loading}
+      aria-busy={loading}
+      aria-disabled={disabled || loading}
       {...props}
     >
       {/* Loading Spinner */}

@@ -18,10 +18,11 @@ import { Card, Button, PageLoader, CardSkeleton } from '../components/common';
 import { Input, SearchInput, Toggle } from '../components/common/Input';
 import { SiteBadge, StatusBadge, Badge } from '../components/common/Badge';
 import { useTracked, useAddTracked, useUpdateTracked, useDeleteTracked } from '../hooks/useTracked';
+import { useToast } from '../context/ToastContext';
 import { formatRelativeTime, truncate, formatInterval } from '../utils/formatters';
 
 // Add Product Modal
-function AddProductModal({ isOpen, onClose }) {
+function AddProductModal({ isOpen, onClose, addToast }) {
   const [mode, setMode] = useState('url'); // 'url' or 'search'
   const [url, setUrl] = useState('');
   const [productName, setProductName] = useState('');
@@ -44,10 +45,12 @@ function AddProductModal({ isOpen, onClose }) {
           onSuccess: () => {
             setUrl('');
             setSite('');
+            addToast?.('Product added successfully', 'success');
             onClose();
           },
           onError: (err) => {
             setError(err.message || 'Failed to add product');
+            addToast?.(err.message || 'Failed to add product', 'error');
           },
         }
       );
@@ -62,10 +65,12 @@ function AddProductModal({ isOpen, onClose }) {
           onSuccess: () => {
             setProductName('');
             setSite('');
+            addToast?.('Product added successfully', 'success');
             onClose();
           },
           onError: (err) => {
             setError(err.message || 'Failed to add product');
+            addToast?.(err.message || 'Failed to add product', 'error');
           },
         }
       );
@@ -220,9 +225,23 @@ function AddProductModal({ isOpen, onClose }) {
 }
 
 // Tracked product card
-function TrackedProductCard({ product, index }) {
-  const { mutate: updateTracked } = useUpdateTracked();
-  const { mutate: deleteTracked } = useDeleteTracked();
+function TrackedProductCard({ product, index, addToast }) {
+  const { mutate: updateTracked } = useUpdateTracked({
+    onSuccess: () => {
+      addToast?.(product.enabled ? 'Tracking paused' : 'Tracking resumed', 'success');
+    },
+    onError: (err) => {
+      addToast?.(err.message || 'Failed to update tracking', 'error');
+    },
+  });
+  const { mutate: deleteTracked } = useDeleteTracked({
+    onSuccess: () => {
+      addToast?.('Product removed from tracking', 'success');
+    },
+    onError: (err) => {
+      addToast?.(err.message || 'Failed to remove product', 'error');
+    },
+  });
 
   const handleToggle = () => {
     updateTracked({ id: product.id, data: { enabled: !product.enabled } });
@@ -317,6 +336,7 @@ function TrackedProductCard({ product, index }) {
 export default function Tracked() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState('all'); // 'all', 'enabled', 'disabled'
+  const { addToast } = useToast();
 
   const { data, isLoading } = useTracked(1, 50);
   
@@ -404,7 +424,7 @@ export default function Tracked() {
       ) : mappedProducts.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {mappedProducts.map((product, index) => (
-            <TrackedProductCard key={product.id} product={product} index={index} />
+            <TrackedProductCard key={product.id} product={product} index={index} addToast={addToast} />
           ))}
         </div>
       ) : (
@@ -421,7 +441,7 @@ export default function Tracked() {
       )}
 
       {/* Add Modal */}
-      <AddProductModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <AddProductModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} addToast={addToast} />
     </motion.div>
   );
 }
