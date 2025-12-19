@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Dependencies
 # -----------------------------------------------------------------------------
-FROM node:20-slim AS deps
+FROM node:25-slim AS deps
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN npm ci --only=production
 # -----------------------------------------------------------------------------
 # Stage 2: Builder (for any build steps if needed)
 # -----------------------------------------------------------------------------
-FROM node:20-slim AS builder
+FROM node:25-slim AS builder
 
 WORKDIR /app
 
