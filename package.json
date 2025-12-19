@@ -92,7 +92,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@faker-js/faker": "^10.1.0",
-    "@jest/globals": "^29.7.0",
+    "@jest/globals": "^30.2.0",
     "@types/node": "^22.10.1",
     "eslint": "^9.15.0",
     "jest": "^29.7.0",
