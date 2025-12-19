@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { 
@@ -13,89 +13,338 @@ import {
   ArrowDown,
   Percent,
   Check,
-  X
+  X,
+  Settings,
+  Send,
+  AlertTriangle,
+  CheckCircle,
+  RefreshCw,
+  Server,
+  Clock,
+  Users,
+  TrendingDown,
+  TrendingUp,
+  Save,
+  TestTube
 } from 'lucide-react';
 import { Card, Button, LoadingSpinner } from '../components/common';
-import { Input, Select, Toggle } from '../components/common/Input';
+import { Input, Toggle } from '../components/common/Input';
 import { SiteBadge, StatusBadge } from '../components/common/Badge';
 import { formatPrice } from '../utils/formatters';
+import { useToast } from '../context/ToastContext';
+import api from '../services/api';
 
-// Sample alerts
-const sampleAlerts = [
-  { 
-    id: 1, 
-    productTitle: 'Sony WH-1000XM5 Headphones', 
-    site: 'amazon',
-    type: 'price_below',
-    targetPrice: 250,
-    currentPrice: 279.99,
-    enabled: true,
-    triggered: false,
-    createdAt: '2024-01-15'
-  },
-  { 
-    id: 2, 
-    productTitle: 'Apple MacBook Pro 14"', 
-    site: 'amazon',
-    type: 'percent_drop',
-    percentDrop: 15,
-    currentPrice: 1799.99,
-    enabled: true,
-    triggered: true,
-    triggeredAt: '2024-01-18',
-    createdAt: '2024-01-10'
-  },
-  { 
-    id: 3, 
-    productTitle: 'LG C3 55" OLED TV', 
-    site: 'amazon',
-    type: 'price_below',
-    targetPrice: 1000,
-    currentPrice: 1196.99,
-    enabled: false,
-    triggered: false,
-    createdAt: '2024-01-08'
-  },
-];
+// Provider display info
+const PROVIDER_INFO = {
+  smtp: { name: 'SMTP', icon: Server, color: 'text-slate-400' },
+  gmail: { name: 'Gmail', icon: Mail, color: 'text-rose-400' },
+  sendgrid: { name: 'SendGrid', icon: Send, color: 'text-blue-400' },
+  ses: { name: 'AWS SES', icon: Server, color: 'text-amber-400' },
+  mailgun: { name: 'Mailgun', icon: Mail, color: 'text-purple-400' },
+  mailru: { name: 'Mail.ru', icon: Mail, color: 'text-orange-400' },
+  test: { name: 'Test Mode', icon: TestTube, color: 'text-emerald-400' },
+};
 
-// Alert card component
+// Email Status Card
+function EmailStatusCard({ emailConfig, emailStatus, onRefresh, isRefreshing }) {
+  const provider = emailConfig?.provider || 'unknown';
+  const providerInfo = PROVIDER_INFO[provider] || { name: provider, icon: Mail, color: 'text-slate-400' };
+  const ProviderIcon = providerInfo.icon;
+
+  return (
+    <Card className="!p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Mail className="h-5 w-5 text-indigo-400" />
+          Email Configuration
+        </h3>
+        <button
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className={clsx(
+            'p-2 rounded-lg transition-colors',
+            'text-slate-500 hover:text-white hover:bg-slate-700/50',
+            isRefreshing && 'animate-spin'
+          )}
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {/* Provider */}
+        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/30">
+          <div className="flex items-center gap-3">
+            <ProviderIcon className={clsx('h-5 w-5', providerInfo.color)} />
+            <div>
+              <p className="text-sm font-medium text-white">{providerInfo.name}</p>
+              <p className="text-xs text-slate-500">Email Provider</p>
+            </div>
+          </div>
+          {emailConfig?.enabled ? (
+            <StatusBadge status="success" size="sm">Enabled</StatusBadge>
+          ) : (
+            <StatusBadge status="warning" size="sm">Disabled</StatusBadge>
+          )}
+        </div>
+
+        {/* Connection Status */}
+        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/30">
+          <div className="flex items-center gap-3">
+            {emailStatus?.verified ? (
+              <CheckCircle className="h-5 w-5 text-emerald-400" />
+            ) : (
+              <AlertTriangle className="h-5 w-5 text-amber-400" />
+            )}
+            <div>
+              <p className="text-sm font-medium text-white">
+                {emailStatus?.verified ? 'Connected' : 'Not Verified'}
+              </p>
+              <p className="text-xs text-slate-500">
+                {emailStatus?.error || emailStatus?.note || 'Connection status'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* From Address */}
+        {emailConfig?.from && (
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/30">
+            <div className="flex items-center gap-3">
+              <Send className="h-5 w-5 text-slate-500" />
+              <div>
+                <p className="text-sm font-medium text-white">{emailConfig.from}</p>
+                <p className="text-xs text-slate-500">From Address</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// Notification Settings Card
+function NotificationSettingsCard({ settings, onSave, isSaving }) {
+  const [localSettings, setLocalSettings] = useState(settings);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    setLocalSettings(settings);
+    setHasChanges(false);
+  }, [settings]);
+
+  const handleChange = (key, value) => {
+    setLocalSettings(prev => ({ ...prev, [key]: value }));
+    setHasChanges(true);
+  };
+
+  const handleSave = () => {
+    onSave(localSettings);
+    setHasChanges(false);
+  };
+
+  const handleRecipientsChange = (value) => {
+    const recipients = value.split(',').map(e => e.trim()).filter(Boolean);
+    handleChange('recipients', recipients);
+  };
+
+  return (
+    <Card className="!p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Settings className="h-5 w-5 text-purple-400" />
+          Notification Preferences
+        </h3>
+        {hasChanges && (
+          <Button 
+            variant="primary" 
+            size="sm" 
+            icon={Save}
+            onClick={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        )}
+      </div>
+
+      <div className="space-y-5">
+        {/* Enable Notifications */}
+        <div className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30">
+          <div className="flex items-center gap-3">
+            <Bell className="h-5 w-5 text-slate-500" />
+            <div>
+              <p className="text-sm font-medium text-white">Enable Notifications</p>
+              <p className="text-xs text-slate-500">Receive email alerts for price changes</p>
+            </div>
+          </div>
+          <Toggle 
+            checked={localSettings?.enabled ?? false} 
+            onChange={(e) => handleChange('enabled', e.target.checked)}
+          />
+        </div>
+
+        {/* Price Drop Threshold */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+            <TrendingDown className="h-4 w-4 text-emerald-400" />
+            Price Drop Alert Threshold
+          </label>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              value={localSettings?.priceDropThreshold ?? 10}
+              onChange={(e) => handleChange('priceDropThreshold', parseFloat(e.target.value))}
+              className="w-24"
+            />
+            <span className="text-sm text-slate-500">% minimum drop to trigger alert</span>
+          </div>
+        </div>
+
+        {/* Price Increase Threshold */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+            <TrendingUp className="h-4 w-4 text-rose-400" />
+            Price Increase Alert Threshold
+          </label>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              value={localSettings?.priceIncreaseThreshold ?? 20}
+              onChange={(e) => handleChange('priceIncreaseThreshold', parseFloat(e.target.value))}
+              className="w-24"
+            />
+            <span className="text-sm text-slate-500">% minimum increase to trigger alert</span>
+          </div>
+        </div>
+
+        {/* Recipients */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+            <Users className="h-4 w-4 text-indigo-400" />
+            Alert Recipients
+          </label>
+          <Input
+            type="text"
+            placeholder="email1@example.com, email2@example.com"
+            value={(localSettings?.recipients || []).join(', ')}
+            onChange={(e) => handleRecipientsChange(e.target.value)}
+          />
+          <p className="text-xs text-slate-500">Comma-separated list of email addresses</p>
+        </div>
+
+        {/* Daily Digest */}
+        <div className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30">
+          <div className="flex items-center gap-3">
+            <Clock className="h-5 w-5 text-slate-500" />
+            <div>
+              <p className="text-sm font-medium text-white">Daily Digest</p>
+              <p className="text-xs text-slate-500">Receive a summary of all price changes</p>
+            </div>
+          </div>
+          <Toggle 
+            checked={localSettings?.dailyDigest ?? false} 
+            onChange={(e) => handleChange('dailyDigest', e.target.checked)}
+          />
+        </div>
+
+        {/* Digest Time */}
+        {localSettings?.dailyDigest && (
+          <div className="space-y-2 pl-12">
+            <label className="text-sm font-medium text-slate-300">Digest Time</label>
+            <Input
+              type="time"
+              value={localSettings?.digestTime ?? '09:00'}
+              onChange={(e) => handleChange('digestTime', e.target.value)}
+              className="w-32"
+            />
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// Test Email Section
+function TestEmailSection({ onSendTest, isSending, emailConfig }) {
+  const [testEmail, setTestEmail] = useState('');
+  
+  const defaultEmail = emailConfig?.alertRecipients?.[0] || '';
+  const canSend = emailConfig?.enabled && (testEmail || defaultEmail);
+
+  return (
+    <Card className="!p-5">
+      <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+        <TestTube className="h-5 w-5 text-amber-400" />
+        Test Email
+      </h3>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-slate-300">Send test to:</label>
+          <Input
+            type="email"
+            placeholder={defaultEmail || 'Enter email address'}
+            value={testEmail}
+            onChange={(e) => setTestEmail(e.target.value)}
+            icon={Mail}
+          />
+        </div>
+
+        <Button
+          variant="secondary"
+          icon={Send}
+          onClick={() => onSendTest(testEmail || defaultEmail)}
+          disabled={!canSend || isSending}
+          className="w-full"
+        >
+          {isSending ? 'Sending...' : 'Send Test Email'}
+        </Button>
+
+        {!emailConfig?.enabled && (
+          <p className="text-xs text-amber-400 flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Email notifications are disabled. Enable in environment variables.
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// Alert Card Component
 function AlertCard({ alert, onToggle, onDelete, onEdit }) {
+  const alertTypeColors = {
+    price_below: 'from-emerald-500/20 to-emerald-600/5 border-emerald-500/30',
+    percent_drop: 'from-purple-500/20 to-purple-600/5 border-purple-500/30',
+  };
+
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       className={clsx(
-        'group relative p-4 rounded-xl',
-        'bg-slate-800/30 border transition-all duration-200',
-        alert.enabled ? 'border-slate-700/50' : 'border-slate-800/30 opacity-60',
-        alert.triggered && 'border-emerald-500/50 bg-emerald-500/5'
+        'p-4 rounded-xl border transition-all duration-200',
+        'bg-gradient-to-r',
+        alertTypeColors[alert.type] || alertTypeColors.price_below,
+        alert.triggered && 'ring-2 ring-amber-500/50'
       )}
     >
-      {/* Triggered indicator */}
-      {alert.triggered && (
-        <div className="absolute -top-2 -right-2">
-          <span className={clsx(
-            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full',
-            'text-xs font-medium',
-            'bg-emerald-500 text-white'
-          )}>
-            <BellRing className="h-3 w-3" />
-            Triggered
-          </span>
-        </div>
-      )}
-
       <div className="flex items-start gap-4">
         {/* Icon */}
         <div className={clsx(
-          'h-10 w-10 rounded-lg flex-shrink-0',
-          'flex items-center justify-center',
-          alert.type === 'price_below' ? 'bg-indigo-500/10' : 'bg-purple-500/10'
+          'p-2 rounded-lg',
+          alert.type === 'price_below' ? 'bg-emerald-500/20' : 'bg-purple-500/20'
         )}>
           {alert.type === 'price_below' 
-            ? <ArrowDown className="h-5 w-5 text-indigo-400" />
+            ? <ArrowDown className="h-5 w-5 text-emerald-400" />
             : <Percent className="h-5 w-5 text-purple-400" />
           }
         </div>
@@ -267,8 +516,8 @@ function CreateAlertModal({ isOpen, onClose }) {
   );
 }
 
-// Empty state
-function EmptyState({ onCreateClick }) {
+// Empty state for alerts
+function EmptyAlertsState() {
   return (
     <div className="text-center py-16">
       <div className={clsx(
@@ -279,21 +528,120 @@ function EmptyState({ onCreateClick }) {
       )}>
         <BellOff className="h-10 w-10 text-slate-600" />
       </div>
-      <h3 className="text-lg font-semibold text-white mb-2">No Alerts Yet</h3>
+      <h3 className="text-lg font-semibold text-white mb-2">No Price Alerts Yet</h3>
       <p className="text-slate-500 max-w-sm mx-auto mb-6">
-        Create price alerts to get notified when products drop to your target price.
+        Price alerts are coming soon! For now, configure your email settings above to receive automatic notifications when prices change.
       </p>
-      <Button variant="primary" icon={Plus} onClick={onCreateClick}>
-        Create Your First Alert
+      <Button variant="secondary" icon={Settings} disabled>
+        Coming Soon
       </Button>
     </div>
   );
 }
 
 export default function Alerts() {
-  const [alerts, setAlerts] = useState(sampleAlerts);
+  const { addToast } = useToast();
+  
+  // Sample alerts (for UI demo - future: fetch from API)
+  const [alerts, setAlerts] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filter, setFilter] = useState('all');
+  
+  // Email & notification state
+  const [emailConfig, setEmailConfig] = useState(null);
+  const [emailStatus, setEmailStatus] = useState(null);
+  const [notificationSettings, setNotificationSettings] = useState(null);
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
+
+  // Fetch email config and notification settings
+  const fetchSettings = async () => {
+    try {
+      const [configRes, statusRes, notifRes] = await Promise.all([
+        api.getEmailConfig(),
+        api.getEmailStatus(),
+        api.getNotificationSettings(),
+      ]);
+      
+      setEmailConfig(configRes);
+      setEmailStatus(statusRes);
+      setNotificationSettings(notifRes);
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+      addToast({
+        type: 'error',
+        title: 'Failed to load settings',
+        message: error.message,
+      });
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchSettings();
+  };
+
+  const handleSendTestEmail = async (email) => {
+    setIsSendingTest(true);
+    try {
+      const result = await api.sendTestEmail(email);
+      if (result.success) {
+        addToast({
+          type: 'success',
+          title: 'Test email sent!',
+          message: `Check your inbox at ${email}`,
+        });
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Failed to send test email',
+          message: result.error,
+        });
+      }
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Failed to send test email',
+        message: error.message,
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
+  const handleSaveNotifications = async (settings) => {
+    setIsSavingNotifications(true);
+    try {
+      const result = await api.updateNotificationSettings(settings);
+      if (result.success) {
+        setNotificationSettings(settings);
+        addToast({
+          type: 'success',
+          title: 'Settings saved!',
+          message: 'Notification preferences updated successfully',
+        });
+      }
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Failed to save settings',
+        message: error.message,
+      });
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
 
   const toggleAlert = (id) => {
     setAlerts(prev => prev.map(alert => 
@@ -303,6 +651,10 @@ export default function Alerts() {
 
   const deleteAlert = (id) => {
     setAlerts(prev => prev.filter(alert => alert.id !== id));
+    addToast({
+      type: 'success',
+      title: 'Alert deleted',
+    });
   };
 
   const editAlert = (alert) => {
@@ -321,6 +673,14 @@ export default function Alerts() {
     triggered: alerts.filter(a => a.triggered).length,
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
   return (
     <motion.div 
       className="space-y-6"
@@ -332,82 +692,127 @@ export default function Alerts() {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Bell className="h-7 w-7 text-amber-400" />
-            Price Alerts
+            Alerts & Notifications
           </h1>
           <p className="text-slate-400 mt-1">
-            Get notified when prices drop to your target
+            Configure email notifications for price changes
           </p>
         </div>
-        <Button 
-          variant="primary" 
-          icon={Plus}
-          onClick={() => setShowCreateModal(true)}
-        >
-          New Alert
-        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total Alerts', value: stats.total, icon: Bell },
-          { label: 'Active', value: stats.active, icon: BellRing, color: 'text-emerald-400' },
-          { label: 'Triggered', value: stats.triggered, icon: Check, color: 'text-indigo-400' },
-        ].map((stat) => (
-          <Card key={stat.label} className="!p-4">
-            <div className="flex items-center gap-3">
-              <stat.icon className={clsx('h-5 w-5', stat.color || 'text-slate-500')} />
-              <div>
-                <p className="text-2xl font-bold text-white">{stat.value}</p>
-                <p className="text-xs text-slate-500">{stat.label}</p>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-2">
-        {[
-          { value: 'all', label: 'All' },
-          { value: 'active', label: 'Active' },
-          { value: 'triggered', label: 'Triggered' },
-        ].map((option) => (
-          <button
-            key={option.value}
-            onClick={() => setFilter(option.value)}
-            className={clsx(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-              filter === option.value
-                ? 'bg-indigo-500 text-white'
-                : 'bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700/50'
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Alerts List */}
-      <Card>
-        {filteredAlerts.length > 0 ? (
+      {/* Email & Notification Settings Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Email Status */}
+        <EmailStatusCard 
+          emailConfig={emailConfig}
+          emailStatus={emailStatus}
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
+        />
+        
+        {/* Test Email */}
+        <TestEmailSection
+          emailConfig={emailConfig}
+          onSendTest={handleSendTestEmail}
+          isSending={isSendingTest}
+        />
+        
+        {/* Quick Stats */}
+        <Card className="!p-5">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-4">
+            <BellRing className="h-5 w-5 text-emerald-400" />
+            Alert Stats
+          </h3>
           <div className="space-y-3">
-            <AnimatePresence mode="popLayout">
-              {filteredAlerts.map((alert) => (
-                <AlertCard
-                  key={alert.id}
-                  alert={alert}
-                  onToggle={toggleAlert}
-                  onDelete={deleteAlert}
-                  onEdit={editAlert}
-                />
-              ))}
-            </AnimatePresence>
+            {[
+              { label: 'Total Alerts', value: stats.total, icon: Bell },
+              { label: 'Active', value: stats.active, icon: BellRing, color: 'text-emerald-400' },
+              { label: 'Triggered', value: stats.triggered, icon: Check, color: 'text-indigo-400' },
+            ].map((stat) => (
+              <div key={stat.label} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/30">
+                <div className="flex items-center gap-3">
+                  <stat.icon className={clsx('h-5 w-5', stat.color || 'text-slate-500')} />
+                  <span className="text-sm text-slate-400">{stat.label}</span>
+                </div>
+                <span className="text-lg font-bold text-white">{stat.value}</span>
+              </div>
+            ))}
           </div>
-        ) : (
-          <EmptyState onCreateClick={() => setShowCreateModal(true)} />
+        </Card>
+      </div>
+
+      {/* Notification Preferences */}
+      <NotificationSettingsCard 
+        settings={notificationSettings}
+        onSave={handleSaveNotifications}
+        isSaving={isSavingNotifications}
+      />
+
+      {/* Price Alerts Section (Future Feature) */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Package className="h-5 w-5 text-indigo-400" />
+            Price Alerts
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 ml-2">
+              Coming Soon
+            </span>
+          </h2>
+          <Button 
+            variant="secondary" 
+            size="sm"
+            icon={Plus}
+            disabled
+          >
+            New Alert
+          </Button>
+        </div>
+
+        {/* Filters */}
+        {alerts.length > 0 && (
+          <div className="flex items-center gap-2 mb-4">
+            {[
+              { value: 'all', label: 'All' },
+              { value: 'active', label: 'Active' },
+              { value: 'triggered', label: 'Triggered' },
+            ].map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setFilter(option.value)}
+                className={clsx(
+                  'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                  filter === option.value
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700/50'
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         )}
-      </Card>
+
+        {/* Alerts List */}
+        <Card>
+          {filteredAlerts.length > 0 ? (
+            <div className="space-y-3">
+              <AnimatePresence mode="popLayout">
+                {filteredAlerts.map((alert) => (
+                  <AlertCard
+                    key={alert.id}
+                    alert={alert}
+                    onToggle={toggleAlert}
+                    onDelete={deleteAlert}
+                    onEdit={editAlert}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <EmptyAlertsState />
+          )}
+        </Card>
+      </div>
 
       {/* Create Alert Modal */}
       <AnimatePresence>

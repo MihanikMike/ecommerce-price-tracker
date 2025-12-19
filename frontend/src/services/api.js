@@ -155,6 +155,70 @@ const api = {
     return res.json();
   },
 
+  // ==================== Settings / Email ====================
+
+  /**
+   * Get email configuration (sanitized - no passwords)
+   */
+  getEmailConfig: async () => {
+    const res = await fetch(`${API_BASE}/settings/email`);
+    if (!res.ok) throw new Error('Failed to fetch email configuration');
+    return res.json();
+  },
+
+  /**
+   * Get email service status
+   */
+  getEmailStatus: async () => {
+    const res = await fetch(`${API_BASE}/settings/email/status`);
+    if (!res.ok) throw new Error('Failed to fetch email status');
+    return res.json();
+  },
+
+  /**
+   * Send test email
+   */
+  sendTestEmail: async (email = null) => {
+    const res = await fetch(`${API_BASE}/settings/email/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error('Failed to send test email');
+    return res.json();
+  },
+
+  /**
+   * Get notification preferences
+   */
+  getNotificationSettings: async () => {
+    const res = await fetch(`${API_BASE}/settings/notifications`);
+    if (!res.ok) throw new Error('Failed to fetch notification settings');
+    return res.json();
+  },
+
+  /**
+   * Update notification preferences
+   */
+  updateNotificationSettings: async (settings) => {
+    const res = await fetch(`${API_BASE}/settings/notifications`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) throw new Error('Failed to update notification settings');
+    return res.json();
+  },
+
+  /**
+   * Get available email providers
+   */
+  getEmailProviders: async () => {
+    const res = await fetch(`${API_BASE}/settings/providers`);
+    if (!res.ok) throw new Error('Failed to fetch email providers');
+    return res.json();
+  },
+
   // ==================== Health ====================
 
   /**
