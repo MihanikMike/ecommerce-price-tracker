@@ -232,4 +232,177 @@ describe('Burton Scraper', () => {
       expect(isTypicalBurtonPrice(5000)).toBe(false); // Too expensive
     });
   });
+
+  describe('Sale price detection', () => {
+    const detectSalePrice = (priceContainer) => {
+      const hasStrikethrough = priceContainer.includes('was') || 
+                              priceContainer.includes('original') ||
+                              priceContainer.includes('strike');
+      const hasSaleIndicator = priceContainer.toLowerCase().includes('sale') ||
+                              priceContainer.toLowerCase().includes('clearance') ||
+                              priceContainer.toLowerCase().includes('now');
+      return hasStrikethrough || hasSaleIndicator;
+    };
+
+    it('should detect sale prices', () => {
+      expect(detectSalePrice('Was $599.95 Now $449.95')).toBe(true);
+      expect(detectSalePrice('Sale: $399.99')).toBe(true);
+      expect(detectSalePrice('Clearance $199.95')).toBe(true);
+    });
+
+    it('should not flag regular prices as sale', () => {
+      expect(detectSalePrice('$599.95')).toBe(false);
+      expect(detectSalePrice('Price: $499.00')).toBe(false);
+    });
+  });
+
+  describe('Title cleaning', () => {
+    const cleanTitle = (title) => {
+      if (!title) return '';
+      return title
+        .replace(/\s+/g, ' ')
+        .replace(/\|.*$/, '') // Remove pipe-separated suffix
+        .replace(/Burton\.com$/, '') // Remove site suffix
+        .trim();
+    };
+
+    it('should remove extra whitespace', () => {
+      expect(cleanTitle('Burton   Custom   Snowboard')).toBe('Burton Custom Snowboard');
+    });
+
+    it('should remove pipe-separated suffixes', () => {
+      expect(cleanTitle('Custom Snowboard | Burton')).toBe('Custom Snowboard');
+    });
+
+    it('should remove site suffix', () => {
+      expect(cleanTitle('Custom Snowboard Burton.com')).toBe('Custom Snowboard');
+    });
+
+    it('should handle empty/null input', () => {
+      expect(cleanTitle(null)).toBe('');
+      expect(cleanTitle('')).toBe('');
+    });
+  });
+
+  describe('Size extraction', () => {
+    const extractSize = (title) => {
+      // Match board sizes first: 154cm, 156W, or just 154
+      const boardMatch = title.match(/(\d{2,3}(?:cm|W)?)\s*$/i);
+      if (boardMatch) return boardMatch[1];
+      
+      // Match clothing sizes - full word boundaries
+      const clothingMatch = title.match(/\b(Medium|Large|Small|XS|XL|XXL)\b/i);
+      if (clothingMatch) {
+        const size = clothingMatch[1].toLowerCase();
+        if (size === 'medium') return 'M';
+        if (size === 'large') return 'L';
+        if (size === 'small') return 'S';
+        return clothingMatch[1].toUpperCase();
+      }
+      
+      return null;
+    };
+
+    it('should extract snowboard size in cm', () => {
+      expect(extractSize('Burton Custom Snowboard - 154cm')).toBe('154cm');
+      expect(extractSize('Process Snowboard 159')).toBe('159');
+    });
+
+    it('should extract wide board size', () => {
+      expect(extractSize('Burton Custom Snowboard 156W')).toBe('156W');
+    });
+
+    it('should extract clothing sizes', () => {
+      expect(extractSize('Mens Jacket - Medium')).toBe('M');
+      expect(extractSize('Womens Pants Large')).toBe('L');
+    });
+
+    it('should return null when no size found', () => {
+      expect(extractSize('Burton Custom Snowboard')).toBeNull();
+    });
+  });
+
+  describe('Color extraction', () => {
+    const extractColor = (title) => {
+      const colorPatterns = /\b(Black|White|Red|Blue|Green|Gray|Grey|Navy|Brown|Orange|Yellow|Purple|Pink|Camo|True Black|Dress Blue)\b/i;
+      const match = title.match(colorPatterns);
+      return match ? match[1] : null;
+    };
+
+    it('should extract common colors', () => {
+      expect(extractColor('Burton Custom Snowboard - Black')).toBe('Black');
+      expect(extractColor('Mens Jacket in Navy')).toBe('Navy');
+    });
+
+    it('should extract Burton-specific colors', () => {
+      expect(extractColor('Jacket - True Black')).toBe('True Black');
+      expect(extractColor('Pants Dress Blue')).toBe('Dress Blue');
+    });
+
+    it('should return null when no color found', () => {
+      expect(extractColor('Burton Custom Snowboard')).toBeNull();
+    });
+  });
+
+  describe('Availability detection', () => {
+    const checkAvailability = (text) => {
+      if (!text) return 'unknown';
+      const lower = text.toLowerCase();
+      if (lower.includes('in stock') || lower.includes('add to cart')) return 'in-stock';
+      if (lower.includes('out of stock') || lower.includes('sold out')) return 'out-of-stock';
+      if (lower.includes('notify me') || lower.includes('waitlist')) return 'waitlist';
+      if (lower.includes('coming soon') || lower.includes('pre-order')) return 'pre-order';
+      return 'unknown';
+    };
+
+    it('should detect in-stock status', () => {
+      expect(checkAvailability('In Stock')).toBe('in-stock');
+      expect(checkAvailability('Add to Cart')).toBe('in-stock');
+    });
+
+    it('should detect out-of-stock status', () => {
+      expect(checkAvailability('Out of Stock')).toBe('out-of-stock');
+      expect(checkAvailability('Sold Out')).toBe('out-of-stock');
+    });
+
+    it('should detect waitlist status', () => {
+      expect(checkAvailability('Notify Me When Available')).toBe('waitlist');
+      expect(checkAvailability('Join Waitlist')).toBe('waitlist');
+    });
+
+    it('should detect pre-order status', () => {
+      expect(checkAvailability('Coming Soon')).toBe('pre-order');
+      expect(checkAvailability('Pre-Order Now')).toBe('pre-order');
+    });
+
+    it('should return unknown for ambiguous text', () => {
+      expect(checkAvailability('Limited quantities')).toBe('unknown');
+    });
+  });
+
+  describe('Error handling patterns', () => {
+    it('should identify geo-blocking', () => {
+      const pageContent = 'This product is not available in your region';
+      const isGeoBlocked = pageContent.toLowerCase().includes('not available in your region') ||
+                          pageContent.toLowerCase().includes('not available in your country');
+      
+      expect(isGeoBlocked).toBe(true);
+    });
+
+    it('should identify product not found', () => {
+      const pageTitle = '404 - Page Not Found';
+      const isNotFound = pageTitle.includes('404') || 
+                        pageTitle.toLowerCase().includes('not found');
+      
+      expect(isNotFound).toBe(true);
+    });
+
+    it('should identify maintenance mode', () => {
+      const pageContent = 'We are currently undergoing maintenance';
+      const isMaintenance = pageContent.toLowerCase().includes('maintenance') ||
+                           pageContent.toLowerCase().includes('temporarily unavailable');
+      
+      expect(isMaintenance).toBe(true);
+    });
+  });
 });

@@ -2,7 +2,8 @@
 
 **Project:** E-Commerce Price Tracker  
 **Created:** December 1, 2025  
-**Status:** 📋 Planning
+**Updated:** December 3, 2025  
+**Status:** 🚧 In Progress (Phase 2 Complete)
 
 ---
 
@@ -167,12 +168,13 @@ server {
 | **Framework** | React 18 | Modern, large ecosystem, component-based |
 | **Build Tool** | Vite | Fast builds, HMR, simple config |
 | **Styling** | Tailwind CSS | Utility-first, matches existing dark theme |
-| **Charts** | Chart.js | Already integrated in project |
+| **Charts** | Chart.js + react-chartjs-2 | Already integrated in project |
 | **State Management** | React Query (TanStack) | Server state, caching, auto-refresh |
 | **Routing** | React Router v6 | SPA navigation |
-| **HTTP Client** | Axios or fetch | API communication |
+| **HTTP Client** | fetch | API communication |
 | **Icons** | Lucide React | Modern icon set |
-| **Tables** | TanStack Table | Sorting, filtering, pagination |
+| **Animations** | Framer Motion | Smooth page/component animations |
+| **Utilities** | clsx | Conditional class names |
 
 ---
 
@@ -245,72 +247,56 @@ server {
 ## Component Architecture
 
 ```
-src/
+frontend/src/
 ├── components/
 │   ├── common/
-│   │   ├── Button.jsx
-│   │   ├── Card.jsx
-│   │   ├── Modal.jsx
-│   │   ├── Table.jsx
-│   │   ├── Pagination.jsx
-│   │   ├── LoadingSpinner.jsx
-│   │   └── ErrorBoundary.jsx
+│   │   ├── Badge.jsx          ✅ PriceChangeBadge, SiteBadge, StatusBadge
+│   │   ├── Button.jsx         ✅ Multiple variants, loading state
+│   │   ├── Card.jsx           ✅ Card, StatsCard, CardSkeleton
+│   │   ├── Input.jsx          ✅ Input, SearchInput, Select, Toggle
+│   │   ├── LoadingSpinner.jsx ✅ PageLoader, animated spinner
+│   │   └── index.js           ✅ Barrel exports
 │   │
 │   ├── layout/
-│   │   ├── Sidebar.jsx
-│   │   ├── Header.jsx
-│   │   ├── Footer.jsx
-│   │   └── Layout.jsx
+│   │   ├── Sidebar.jsx        ✅ Animated, collapsible
+│   │   ├── Header.jsx         ✅ Search, notifications, theme toggle
+│   │   └── Layout.jsx         ✅ Main layout wrapper
 │   │
-│   ├── products/
-│   │   ├── ProductList.jsx
-│   │   ├── ProductCard.jsx
-│   │   ├── ProductDetails.jsx
-│   │   └── ProductFilters.jsx
-│   │
-│   ├── charts/
-│   │   ├── PriceChart.jsx
-│   │   ├── ComparisonChart.jsx
-│   │   ├── StatsCards.jsx
-│   │   └── ChartControls.jsx
-│   │
-│   ├── tracked/
-│   │   ├── TrackedList.jsx
-│   │   ├── AddTrackedModal.jsx
-│   │   └── TrackedItem.jsx
-│   │
-│   └── dashboard/
-│       ├── StatsOverview.jsx
-│       ├── RecentDrops.jsx
-│       └── QuickActions.jsx
+│   └── charts/
+│       ├── PriceChart.jsx     ✅ Chart.js line chart with time ranges
+│       └── index.js           ✅ Barrel exports
+│
+├── context/
+│   └── ThemeContext.jsx       ✅ Light/Dark mode toggle
 │
 ├── pages/
-│   ├── Dashboard.jsx
-│   ├── Products.jsx
-│   ├── ProductDetail.jsx
-│   ├── Tracked.jsx
-│   ├── PriceDrops.jsx
-│   ├── Compare.jsx
-│   ├── Alerts.jsx
-│   └── Settings.jsx
+│   ├── Dashboard.jsx          ✅ Stats, recent drops, system status
+│   ├── Products.jsx           ✅ Table, filters, pagination
+│   ├── ProductDetail.jsx      ✅ Details, chart, price stats
+│   ├── Tracked.jsx            ✅ List, add modal, toggle/delete
+│   ├── PriceDrops.jsx         📋 Planned
+│   ├── Compare.jsx            📋 Planned
+│   ├── Alerts.jsx             📋 Planned
+│   └── Settings.jsx           📋 Planned
 │
 ├── hooks/
-│   ├── useProducts.js
-│   ├── useTracked.js
-│   ├── usePriceChanges.js
-│   ├── useChartData.js
-│   └── useCache.js
+│   ├── useProducts.js         ✅ useProducts, useProduct, useDeleteProduct
+│   ├── useTracked.js          ✅ useTracked, useAddTracked, useUpdateTracked, useDeleteTracked
+│   ├── usePriceChanges.js     ✅ Recent price drops
+│   ├── useChartData.js        ✅ Chart data with time ranges
+│   ├── useStats.js            ✅ Dashboard statistics
+│   ├── useCache.js            ✅ Cache management
+│   └── index.js               ✅ Barrel exports
 │
 ├── services/
-│   └── api.js          # API client
+│   └── api.js                 ✅ Full API client
 │
 ├── utils/
-│   ├── formatters.js   # Price, date formatting
-│   └── constants.js
+│   └── formatters.js          ✅ Price, date, relative time, interval formatters
 │
-├── App.jsx
-├── main.jsx
-└── index.css           # Tailwind imports
+├── App.jsx                    ✅ Routes, providers
+├── main.jsx                   ✅ Entry point
+└── index.css                  ✅ Design system, CSS variables, animations
 ```
 
 ---
@@ -426,21 +412,53 @@ export default api;
 
 ## UI Design Guidelines
 
-### Color Palette (Dark Theme)
+### Color Palette (Dark Theme - Default)
 
 ```css
 :root {
-  --bg-primary: #0f172a;      /* slate-900 */
-  --bg-secondary: #1e293b;    /* slate-800 */
-  --bg-card: #334155;         /* slate-700 */
-  --text-primary: #f8fafc;    /* slate-50 */
-  --text-secondary: #94a3b8;  /* slate-400 */
+  /* Background colors */
+  --bg-primary: #0f172a;      /* slate-900 - Main background */
+  --bg-secondary: #1e293b;    /* slate-800 - Cards, sidebar */
+  --bg-card: rgba(30, 41, 59, 0.8);  /* Glass effect cards */
+  
+  /* Text colors */
+  --text-primary: #f8fafc;    /* slate-50 - Main text */
+  --text-secondary: #94a3b8;  /* slate-400 - Secondary text */
+  
+  /* Accent colors (Indigo/Purple theme) */
   --accent-primary: #6366f1;  /* indigo-500 */
+  --accent-secondary: #8b5cf6; /* violet-500 */
+  
+  /* Status colors */
   --accent-success: #10b981;  /* emerald-500 */
   --accent-warning: #f59e0b;  /* amber-500 */
   --accent-danger: #ef4444;   /* red-500 */
+  
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #6366f1, #8b5cf6);
+  --gradient-glow: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15), transparent 50%);
 }
 ```
+
+### Light Theme
+
+```css
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+}
+```
+
+### Design Features
+
+- **Glassmorphism**: Cards use `backdrop-blur-xl` with semi-transparent backgrounds
+- **Gradients**: Primary buttons and accents use indigo-to-purple gradients  
+- **Animations**: Framer Motion for page transitions, hover effects, loading states
+- **Glow Effects**: Subtle ring glows on focused/hovered elements
+- **Dark/Light Toggle**: System-aware with manual override, persisted to localStorage
 
 ### Component Examples
 
@@ -469,32 +487,44 @@ export default api;
 
 ## Implementation Phases
 
-### Phase 1: Foundation (Week 1)
-- [ ] Initialize Vite + React project in `/frontend`
-- [ ] Set up Tailwind CSS with dark theme
-- [ ] Create basic layout (sidebar, header)
-- [ ] Set up React Router
-- [ ] Configure React Query
-- [ ] Create API service module
+### Phase 1: Foundation (Week 1) ✅ COMPLETED - December 2, 2025
+- [x] Initialize Vite + React project in `/frontend`
+- [x] Set up Tailwind CSS with dark theme
+- [x] Create basic layout (sidebar, header)
+- [x] Set up React Router
+- [x] Configure React Query
+- [x] Create API service module
 
-### Phase 2: Core Pages (Week 2)
-- [ ] Dashboard with stats cards
-- [ ] Products list with pagination
-- [ ] Product detail page with existing chart
-- [ ] Tracked products list
-- [ ] Add tracked product modal
+### Phase 1.5: UI/UX Redesign ✅ COMPLETED - December 2, 2025
+- [x] Modern dark theme with gradients and glassmorphism
+- [x] Framer Motion animations throughout
+- [x] Custom design system with CSS variables
+- [x] Light/Dark mode toggle with ThemeContext
+- [x] Indigo/Purple color scheme
+- [x] Responsive layout with animated sidebar
 
-### Phase 3: Features (Week 3)
-- [ ] Price drops page
-- [ ] Product comparison
-- [ ] Search and filtering
-- [ ] Settings page
-- [ ] Cache management UI
+### Phase 2: Core Pages (Week 2) ✅ COMPLETED - December 3, 2025
+- [x] Dashboard with real API stats (products, tracked, price records, DB size)
+- [x] Dashboard recent price drops from `/api/price-changes`
+- [x] Products list with real pagination from `/api/products`
+- [x] Product detail page with real data from `/api/products/:id`
+- [x] **Chart.js integration** - Interactive price chart with time range selector
+- [x] Tracked products list from `/api/tracked`
+- [x] Add tracked product modal (URL-based and Search-based)
+- [x] Enable/disable tracking toggle
+- [x] Delete tracked product
+
+### Phase 3: Features (Week 3) ✅ COMPLETED - December 4, 2025
+- [x] Price drops page with filters (time range, min drop %, site filter, sort options, stats summary)
+- [x] Product comparison page (multi-select from API, side-by-side table, overlay Chart.js price chart)
+- [x] Advanced search and filtering (search by title/URL, price range, date range, price history filter, results per page)
+- [x] Settings page (system status overview, theme toggle, notification settings)
+- [x] Cache management UI (detailed stats, hit rate visualization, clear cache with confirmation)
 
 ### Phase 4: Polish (Week 4)
-- [ ] Loading states and skeletons
+- [ ] Loading states and skeletons ✅ (Partially done)
 - [ ] Error handling and toasts
-- [ ] Responsive design
+- [ ] Responsive design improvements
 - [ ] Accessibility improvements
 - [ ] Build optimization
 
@@ -508,6 +538,7 @@ export default api;
 cd frontend
 npm install
 npm run dev        # Starts Vite dev server on :5173
+
 ```
 
 ### Production Build
@@ -568,10 +599,40 @@ CMD ["node", "src/index.js"]
 
 ## Next Steps
 
-1. **Decide on architecture** - Option 1 (static) recommended
-2. **Initialize frontend project** - `npm create vite@latest frontend -- --template react`
-3. **Start with Layout + Dashboard** - Get basic structure working
-4. **Iterate on pages** - Build out each page incrementally
+1. ~~**Decide on architecture**~~ ✅ Option 1 (static) - completed
+2. ~~**Initialize frontend project**~~ ✅ Vite + React setup complete
+3. ~~**Start with Layout + Dashboard**~~ ✅ Full layout with animations
+4. ~~**Build core pages**~~ ✅ Dashboard, Products, ProductDetail, Tracked
+5. ~~**Build remaining pages**~~ ✅ PriceDrops, Compare, Settings
+6. **Add error handling** - Toast notifications, error boundaries
+7. **Production build** - Optimize and integrate with API server
+8. **Add Alerts page** - Email configuration UI
+
+---
+
+## Current Features Summary
+
+### Completed ✅
+- Modern dark theme with light mode toggle
+- Animated sidebar navigation
+- Dashboard with real-time stats from API
+- Products list with advanced filtering (search, price range, date range)
+- Product detail page with Chart.js price history
+- Tracked products management (add URL/search, toggle, delete)
+- Price drops page with filters and stats summary
+- Product comparison tool with overlay charts
+- Settings page with system status and cache management
+- Responsive design foundation
+- Loading skeletons and states
+
+### In Progress 🚧
+- Email alerts configuration page
+
+### Planned 📋
+- Toast notifications for actions
+- Error boundaries
+- Export functionality
+- PWA capabilities
 
 ---
 

@@ -28,8 +28,10 @@ import config from "../config/index.js";
 
 /**
  * Get the appropriate scraper for a URL
+ * @param {string} url - URL to check
+ * @returns {Object} Scraper info with name and scraper function
  */
-function getScraperForUrl(url) {
+export function getScraperForUrl(url) {
     if (url.includes("amazon.com")) {
         return { name: 'Amazon', scraper: scrapeAmazon };
     }

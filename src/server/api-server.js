@@ -15,6 +15,7 @@ import * as priceChangeService from '../services/priceChangeService.js';
 import * as chartService from '../services/chartService.js';
 import * as cacheService from '../services/cacheService.js';
 import { getDatabaseStats } from '../services/retentionService.js';
+import * as emailService from '../services/emailService.js';
 import config from '../config/index.js';
 
 const DEFAULT_PORT = parseInt(process.env.API_PORT, 10) || 3001;
@@ -762,6 +763,266 @@ router.delete('/cache/product/:id', async (req, res, params) => {
 });
 
 // ============================================================
+// EMAIL / SETTINGS API
+// ============================================================
+
+/**
+ * GET /api/settings/email - Get email configuration (sanitized)
+ */
+router.get('/settings/email', async (req, res, params) => {
+    try {
+        const emailConfig = emailService.getEmailConfig();
+        
+        // Return sanitized config (no passwords)
+        sendJSON(res, 200, {
+            enabled: emailConfig.enabled,
+            provider: emailConfig.provider,
+            from: emailConfig.from,
+            fromName: emailConfig.fromName,
+            alertRecipients: config.email.alertRecipients,
+            // Provider-specific (sanitized)
+            smtp: {
+                host: emailConfig.smtp.host,
+                port: emailConfig.smtp.port,
+                secure: emailConfig.smtp.secure,
+                user: emailConfig.smtp.user,
+                configured: !!emailConfig.smtp.pass,
+            },
+            gmail: {
+                user: emailConfig.gmail.user,
+                configured: !!emailConfig.gmail.appPassword,
+            },
+            sendgrid: {
+                configured: !!emailConfig.sendgrid.apiKey,
+            },
+            ses: {
+                region: emailConfig.ses.region,
+                configured: !!(emailConfig.ses.accessKeyId && emailConfig.ses.secretAccessKey),
+            },
+            mailgun: {
+                domain: emailConfig.mailgun.domain,
+                configured: !!emailConfig.mailgun.apiKey,
+            },
+            mailru: {
+                user: emailConfig.mailru.user,
+                configured: !!emailConfig.mailru.appPassword,
+            },
+        });
+    } catch (error) {
+        logger.error({ error }, 'API error: GET /settings/email');
+        sendError(res, 500, 'Failed to fetch email settings', error.message);
+    }
+});
+
+/**
+ * GET /api/settings/email/status - Get email service status
+ */
+router.get('/settings/email/status', async (req, res, params) => {
+    try {
+        const emailConfig = emailService.getEmailConfig();
+        const verifyResult = await emailService.verifyEmailConfig();
+        
+        sendJSON(res, 200, {
+            enabled: emailConfig.enabled,
+            provider: emailConfig.provider,
+            verified: verifyResult.success,
+            error: verifyResult.error || null,
+            note: verifyResult.note || null,
+        });
+    } catch (error) {
+        logger.error({ error }, 'API error: GET /settings/email/status');
+        sendError(res, 500, 'Failed to verify email configuration', error.message);
+    }
+});
+
+/**
+ * POST /api/settings/email/test - Send a test email
+ */
+router.post('/settings/email/test', async (req, res, params) => {
+    try {
+        const body = await parseBody(req);
+        const testEmail = body.email || config.email.alertRecipients[0];
+        
+        if (!testEmail) {
+            return sendError(res, 400, 'No email address provided and no default recipients configured');
+        }
+        
+        const emailConfig = emailService.getEmailConfig();
+        
+        if (!emailConfig.enabled) {
+            return sendJSON(res, 200, {
+                success: false,
+                error: 'Email notifications are disabled. Set EMAIL_ENABLED=true in environment.',
+            });
+        }
+        
+        // Send test email
+        const result = await emailService.sendEmail({
+            to: testEmail,
+            subject: '🧪 Price Tracker - Test Email',
+            text: `Hello!\n\nThis is a test email from your Price Tracker application.\n\nIf you're receiving this, your email notifications are configured correctly!\n\nConfiguration:\n- Provider: ${emailConfig.provider}\n- From: ${emailConfig.from}\n\nBest regards,\nPrice Tracker`,
+            html: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                        <h1 style="margin: 0; color: white; font-size: 24px;">🧪 Test Email</h1>
+                    </div>
+                    <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none;">
+                        <p style="color: #334155; font-size: 16px; line-height: 1.6;">
+                            This is a test email from your <strong>Price Tracker</strong> application.
+                        </p>
+                        <p style="color: #64748b; font-size: 14px; line-height: 1.6;">
+                            If you're receiving this, your email notifications are configured correctly!
+                        </p>
+                        <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                            <p style="margin: 0 0 8px 0; color: #475569; font-size: 13px;">
+                                <strong>Provider:</strong> ${emailConfig.provider}
+                            </p>
+                            <p style="margin: 0; color: #475569; font-size: 13px;">
+                                <strong>From:</strong> ${emailConfig.from}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `,
+        });
+        
+        if (result.success) {
+            logger.info({ to: testEmail }, 'Test email sent successfully');
+            sendJSON(res, 200, {
+                success: true,
+                message: `Test email sent to ${testEmail}`,
+                messageId: result.messageId,
+            });
+        } else {
+            sendJSON(res, 200, {
+                success: false,
+                error: result.error,
+            });
+        }
+    } catch (error) {
+        logger.error({ error }, 'API error: POST /settings/email/test');
+        sendError(res, 500, 'Failed to send test email', error.message);
+    }
+});
+
+/**
+ * GET /api/settings/notifications - Get notification preferences
+ */
+router.get('/settings/notifications', async (req, res, params) => {
+    try {
+        // Get notification settings from database or use defaults from config
+        const result = await pool.query(`
+            SELECT key, value FROM app_settings WHERE key LIKE 'notification_%'
+        `).catch(() => ({ rows: [] }));
+        
+        // Build settings object from database or defaults
+        const dbSettings = {};
+        result.rows.forEach(row => {
+            dbSettings[row.key] = JSON.parse(row.value);
+        });
+        
+        const notifications = {
+            enabled: dbSettings.notification_enabled ?? config.email.enabled,
+            priceDropThreshold: dbSettings.notification_price_drop_threshold ?? config.priceChange.alertDropThreshold,
+            priceIncreaseThreshold: dbSettings.notification_price_increase_threshold ?? config.priceChange.alertIncreaseThreshold,
+            recipients: dbSettings.notification_recipients ?? config.email.alertRecipients,
+            dailyDigest: dbSettings.notification_daily_digest ?? false,
+            digestTime: dbSettings.notification_digest_time ?? '09:00',
+        };
+        
+        sendJSON(res, 200, notifications);
+    } catch (error) {
+        logger.error({ error }, 'API error: GET /settings/notifications');
+        sendError(res, 500, 'Failed to fetch notification settings', error.message);
+    }
+});
+
+/**
+ * PUT /api/settings/notifications - Update notification preferences
+ */
+router.put('/settings/notifications', async (req, res, params) => {
+    try {
+        const body = await parseBody(req);
+        
+        // Validate input
+        if (body.priceDropThreshold !== undefined && (body.priceDropThreshold < 0 || body.priceDropThreshold > 100)) {
+            return sendError(res, 400, 'priceDropThreshold must be between 0 and 100');
+        }
+        if (body.priceIncreaseThreshold !== undefined && (body.priceIncreaseThreshold < 0 || body.priceIncreaseThreshold > 100)) {
+            return sendError(res, 400, 'priceIncreaseThreshold must be between 0 and 100');
+        }
+        if (body.recipients !== undefined && !Array.isArray(body.recipients)) {
+            return sendError(res, 400, 'recipients must be an array of email addresses');
+        }
+        
+        // Create app_settings table if it doesn't exist
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key VARCHAR(100) PRIMARY KEY,
+                value JSONB NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        
+        // Update settings
+        const settingsToUpdate = [];
+        if (body.enabled !== undefined) settingsToUpdate.push(['notification_enabled', body.enabled]);
+        if (body.priceDropThreshold !== undefined) settingsToUpdate.push(['notification_price_drop_threshold', body.priceDropThreshold]);
+        if (body.priceIncreaseThreshold !== undefined) settingsToUpdate.push(['notification_price_increase_threshold', body.priceIncreaseThreshold]);
+        if (body.recipients !== undefined) settingsToUpdate.push(['notification_recipients', body.recipients]);
+        if (body.dailyDigest !== undefined) settingsToUpdate.push(['notification_daily_digest', body.dailyDigest]);
+        if (body.digestTime !== undefined) settingsToUpdate.push(['notification_digest_time', body.digestTime]);
+        
+        for (const [key, value] of settingsToUpdate) {
+            await pool.query(`
+                INSERT INTO app_settings (key, value, updated_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()
+            `, [key, JSON.stringify(value)]);
+        }
+        
+        logger.info({ settings: Object.keys(body) }, 'Notification settings updated via API');
+        
+        // Return updated settings
+        const result = await pool.query(`
+            SELECT key, value FROM app_settings WHERE key LIKE 'notification_%'
+        `);
+        
+        const notifications = {};
+        result.rows.forEach(row => {
+            const shortKey = row.key.replace('notification_', '');
+            notifications[shortKey] = JSON.parse(row.value);
+        });
+        
+        sendJSON(res, 200, {
+            success: true,
+            notifications,
+        });
+    } catch (error) {
+        logger.error({ error }, 'API error: PUT /settings/notifications');
+        sendError(res, 500, 'Failed to update notification settings', error.message);
+    }
+});
+
+/**
+ * GET /api/settings/providers - Get available email providers
+ */
+router.get('/settings/providers', async (req, res, params) => {
+    sendJSON(res, 200, {
+        providers: Object.values(emailService.EMAIL_PROVIDERS),
+        descriptions: {
+            smtp: 'Custom SMTP server',
+            gmail: 'Gmail (requires App Password)',
+            sendgrid: 'SendGrid email service',
+            ses: 'Amazon Simple Email Service',
+            mailgun: 'Mailgun email service',
+            mailru: 'Mail.ru (requires App Password)',
+            test: 'Test mode (logs only, no emails sent)',
+        },
+    });
+});
+
+// ============================================================
 // CHARTS API
 // ============================================================
 
@@ -1068,6 +1329,14 @@ async function handleRequest(req, res) {
                         stats: {
                             'GET /api/stats': 'Get database statistics',
                             'GET /api/stats/config': 'Get current configuration',
+                        },
+                        settings: {
+                            'GET /api/settings/email': 'Get email configuration (sanitized)',
+                            'GET /api/settings/email/status': 'Get email service status and verify connection',
+                            'POST /api/settings/email/test': 'Send a test email',
+                            'GET /api/settings/notifications': 'Get notification preferences',
+                            'PUT /api/settings/notifications': 'Update notification preferences',
+                            'GET /api/settings/providers': 'Get available email providers',
                         },
                         search: {
                             'POST /api/search': 'Search for products',

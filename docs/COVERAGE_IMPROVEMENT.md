@@ -1,21 +1,23 @@
 # 📊 Test Coverage Improvement Guide
 
-**Current Coverage:** 42%+ ✅  
-**Target Coverage:** 40%+ ✅ ACHIEVED  
-**Last Updated:** December 1, 2025
+**Current Coverage:** ~39% statements, ~41% branches, ~48% functions  
+**Target Coverage:** 40%+ ✅ PARTIALLY ACHIEVED  
+**Last Updated:** December 3, 2025
 
 ---
 
-## 🎉 Coverage Milestone Achieved!
+## 🎉 Coverage Status
 
-We successfully improved test coverage from **22.5%** to **42%+** (lines), exceeding our target!
+We've improved test coverage significantly with the following metrics:
 
-- **Total Tests:** 855 passing (up from ~598)
-- **Test Suites:** 37 passing
-- **Statement Coverage:** ~42%
-- **Line Coverage:** ~42%
-- **Branch Coverage:** ~41%
-- **Function Coverage:** ~49%
+- **Total Tests:** 985 passing (up from ~598)
+- **Test Suites:** 39 passing
+- **Statement Coverage:** ~39.1%
+- **Line Coverage:** ~39.3%
+- **Branch Coverage:** ~40.7% ✅
+- **Function Coverage:** ~48.0% ✅
+
+Branch and function coverage exceed 40%! Statement/line coverage is just under at ~39%.
 
 ---
 
@@ -31,43 +33,44 @@ We successfully improved test coverage from **22.5%** to **42%+** (lines), excee
 | `retry.js` | 95% | 94% | ✅ Excellent |
 | `retentionService.js` | 94% | 94% | ✅ Excellent |
 | `product-matcher.js` | 94% | 95% | ✅ Excellent |
-| `rate-limiter.js` | 86% | 93% | ✅ Excellent |
-| **`site-error-handler.js`** | **87%** | **90%** | ✅ **NEW** |
-| `productRepository.js` | 89% | 89% | ✅ Excellent |
+| `emailService.js` | 94% | 94% | ✅ Excellent |
+| `site-error-handler.js` | 87% | 90% | ✅ Excellent |
+| `productRepository.js` | 87% | 87% | ✅ Excellent |
 | `site-registry.js` | 88% | 87% | ✅ Excellent |
+| `rate-limiter.js` | 86% | 93% | ✅ Excellent |
 | `productService.js` | 77% | 77% | 🟡 Good |
 | `useragents.js` | 76% | 76% | 🟡 Good |
 | `exportService.js` | 75% | 75% | 🟡 Good |
 | `trackedProductsRepository.js` | 71% | 71% | 🟡 Good |
-| `priceAlertService.js` | 68% | 68% | 🟡 Good |
+| `priceAlertService.js` | 65% | 65% | 🟡 Good |
 | `logger.js` | 65% | 65% | 🟡 Good |
-| `api-server.js` | 65% | 64% | 🟡 Good |
-| **`chartService.js`** | **100%** | **100%** | ✅ **NEW** |
-| **`emailService.js`** | **100%** | **100%** | ✅ **NEW** |
-| **`cacheService.js`** | **95%** | **95%** | ✅ **NEW** |
-| `config/index.js` | 41% | 41% | 🟠 Moderate |
+| `api-server.js` | 50% | 51% | 🟡 Good |
+| `config/index.js` | 44% | 44% | 🟠 Moderate |
 | `connect-pg.js` | 29% | 30% | 🟠 Moderate |
+| `cacheService.js` | 28% | 26% | 🟠 Moderate |
+| **`health-server.js`** | **18%** | **18%** | 🟠 **Improved from 0%** |
+| `chartService.js` | 14% | 14% | 🔴 Low (pure functions tested) |
 | `proxy-manager.js` | 13% | 14% | 🔴 Low |
-| `BrowserPool.js` | 9% | 9% | 🔴 Low |
-| `search-engine.js` | 7% | 7% | 🔴 Low |
-| `fetch-page.js` | 2% | 2% | 🔴 Low |
-| `amazon.js` | 0% | 0% | ❌ None |
-| `burton.js` | 0% | 0% | ❌ None |
-| `price-monitor.js` | 0% | 0% | ❌ None |
-| `search-monitor.js` | 0% | 0% | ❌ None |
-| `health-server.js` | 0% | 0% | ❌ None |
-| `scrapeWorker.js` | 0% | 0% | ❌ None |
+| `BrowserPool.js` | 10% | 10% | 🔴 Low |
+| **`scrapeWorker.js`** | **6%** | **6%** | 🔴 **Improved from 0%** |
+| `fetch-page.js` | 6% | 6% | 🔴 Low |
+| `search-engine.js` | 4% | 4% | 🔴 Low |
+| `amazon.js` | 0% | 0% | ❌ None (requires browser) |
+| `burton.js` | 0% | 0% | ❌ None (requires browser) |
+| `price-monitor.js` | 0% | 0% | ❌ None (complex dependencies) |
+| `search-monitor.js` | 0% | 0% | ❌ None (complex dependencies) |
 
 ---
 
-## ✅ Completed Improvements (Session: Dec 1, 2025)
+## ✅ Completed Improvements (Session: Dec 3, 2025)
 
-### NEW: emailService.js (0% → 100%)
-**Strategy:** Comprehensive unit tests for email providers
+### health-server.js (0% → 18%)
+**Strategy:** Export pure functions for testing
 
 ```javascript
-import { EMAIL_PROVIDERS, getEmailConfig, createTransporter, verifyEmailConfig, 
-         sendEmail, sendPriceAlertEmail, sendDailyDigestEmail } 
+// Added exports for testing
+export function getAppState() { return { ...appState }; }
+export function resetAppState() { /* reset all state */ } 
   from '../../../src/services/emailService.js';
 ```
 

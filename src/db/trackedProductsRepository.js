@@ -29,6 +29,7 @@ export async function getProductsToCheck(limit = 100) {
 
 /**
  * Update product check timestamp and schedule next check
+ * Uses SELECT FOR UPDATE to prevent race conditions with concurrent workers
  * @param {number} productId - Product ID
  * @param {boolean} success - Whether the check was successful
  */
@@ -44,13 +45,15 @@ export async function updateProductCheckTime(productId, success = true) {
         try {
             await client.query('BEGIN');
 
-            // Get the check interval
+            // Lock the row to prevent race conditions with concurrent workers
+            // SELECT FOR UPDATE ensures only one worker can update at a time
             const product = await client.query(
-                'SELECT check_interval_minutes FROM tracked_products WHERE id = $1',
+                'SELECT check_interval_minutes FROM tracked_products WHERE id = $1 FOR UPDATE',
                 [validation.sanitized]
             );
 
             if (product.rows.length === 0) {
+                await client.query('ROLLBACK');
                 throw new Error(`Product ${productId} not found`);
             }
 
