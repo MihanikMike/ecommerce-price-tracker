@@ -81,7 +81,7 @@
     "ioredis": "^5.8.2",
     "nodemailer": "^7.0.11",
     "pg": "^8.16.3",
-    "pino": "^9.5.0",
+    "pino": "^10.1.0",
     "pino-pretty": "^11.3.0",
     "pino-roll": "^4.0.0",
     "playwright": "^1.57.0",
